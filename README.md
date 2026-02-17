@@ -1,9 +1,9 @@
-Setup:
+## Setup
 ./scripts/setup.sh
 source venv/bin/activate
 
-Run control-plane:
+## Run Control Plane
 uvicorn control-plane.main:app --reload
 
-Run data-plane:
+## Run Data Plane
 uvicorn data-plane.stream_server:app --reload
