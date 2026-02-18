@@ -59,10 +59,10 @@ Open two terminals.
 Run Control Plane
 
 ```bash
-uvicorn control-plane.main:app --reload
+uvicorn control_plane.main:app --reload --port 8000
 ```
 Run Data Plane
 
 ```bash
-uvicorn data-plane.stream_server:app --reload
+uvicorn data_plane.stream_server:app --reload --port 8001
 ```

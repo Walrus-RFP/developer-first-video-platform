@@ -29,3 +29,19 @@ def complete_upload(session_id: str):
         "status": "upload completed",
         "total_chunks": len(manifest["chunks"])
     }
+
+@router.get("/upload-status/{session_id}")
+def upload_status(session_id: str):
+    import os, json
+
+    manifest_path = f"storage/{session_id}/manifest.json"
+
+    if not os.path.exists(manifest_path):
+        return {"uploaded_chunks": []}
+
+    with open(manifest_path) as f:
+        manifest = json.load(f)
+
+    return {
+        "uploaded_chunks": [c["chunk_id"] for c in manifest["chunks"]]
+    }
