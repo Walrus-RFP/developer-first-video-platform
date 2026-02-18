@@ -1,0 +1,1 @@
+Client → create session → upload chunks → stored in storage/
