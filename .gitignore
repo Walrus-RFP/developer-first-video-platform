@@ -1,1 +1,61 @@
+# ------------------------------
+# Python
+# ------------------------------
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+
+# Virtual environment
+venv/
+.env/
+.env.*
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# ------------------------------
+# Node / Next.js
+# ------------------------------
+node_modules/
+.next/
+out/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ------------------------------
+# Build / Cache
+# ------------------------------
+.cache/
+*.egg-info/
+build/
+coverage/
+
+# ------------------------------
+# IDE files
+# ------------------------------
+.vscode/
+.idea/
+
+# ------------------------------
+# Secrets
+# ------------------------------
+.env
+.env.local
+.env.development
+.env.production
+
+# ------------------------------
+# Storage / Uploaded files
+# ------------------------------
+storage/
+uploads/
+tmp/
 
