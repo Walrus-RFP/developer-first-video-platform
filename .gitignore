@@ -59,3 +59,7 @@ storage/
 uploads/
 tmp/
 
+*.db
+sample.mp4
+chunk_*
+
