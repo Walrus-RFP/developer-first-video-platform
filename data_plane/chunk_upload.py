@@ -10,6 +10,7 @@ os.makedirs(STORAGE_DIR, exist_ok=True)
 def checksum(data):
     return hashlib.sha256(data).hexdigest()
 
+#UNDERSTOOD TILL HERE
 
 @router.post("/upload-chunk/{session_id}/{chunk_id}/{chunk_index}")
 async def upload_chunk(
@@ -25,7 +26,6 @@ async def upload_chunk(
 
     content = await file.read()
 
-    # ---- update manifest ----
     manifest_path = os.path.join(session_dir, "manifest.json")
 
     if os.path.exists(manifest_path):
@@ -34,16 +34,13 @@ async def upload_chunk(
     else:
         manifest = {"session_id": session_id, "chunks": []}
 
-    # ❌ prevent duplicate chunk
     for c in manifest["chunks"]:
         if c["chunk_id"] == chunk_id:
             raise HTTPException(status_code=400, detail="Chunk already uploaded")
 
-    # save file
     with open(file_path, "wb") as f:
         f.write(content)
 
-    # add chunk metadata
     manifest["chunks"].append({
         "chunk_id": chunk_id,
         "chunk_index": chunk_index,
@@ -51,7 +48,6 @@ async def upload_chunk(
         "size": len(content)
     })
 
-    # ✅ sort by chunk_index
     manifest["chunks"].sort(key=lambda x: x["chunk_index"])
 
     with open(manifest_path, "w") as f:
