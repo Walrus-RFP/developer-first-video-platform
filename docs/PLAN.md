@@ -43,7 +43,7 @@ Goal: Upload → Store → Play video locally with reusable asset support.
 
 ---
 
-## Day 3 (18th Feb)— Upload Session + Chunk Upload (DONE, except metadata db)
+## Day 3 (18th Feb)— Upload Session + Chunk Upload (DONE)
 
 | Task | Person A | Person B | Output Files | Check |
 |------|-----------|-----------|---------------|-------|
@@ -54,7 +54,7 @@ Goal: Upload → Store → Play video locally with reusable asset support.
 
 ---
 
-## Day 4 (19th Feb)— Resume Upload + Manifest + Versioning
+## Day 4 (19th Feb)— Resume Upload + Manifest + Versioning (DONE)
 
 | Task | Person A | Person B | Output Files | Check |
 |------|-----------|-----------|---------------|-------|
