@@ -65,7 +65,7 @@ Goal: Upload → Store → Play video locally with reusable asset support.
 
 ---
 
-## Day 5 (20th Feb)— Basic Playback
+## Day 5 (20th Feb)— Basic Playback (DONE)
 
 | Task | Person A | Person B | Output Files | Check |
 |------|-----------|-----------|---------------|-------|
