@@ -4,7 +4,9 @@ import os
 import json
 from control_plane.db import create_video
 from control_plane.db import create_video, list_videos
-
+from control_plane.db import get_video
+import hashlib
+from control_plane.db import create_video, get_video_by_checksum
 
 router = APIRouter()
 
@@ -13,7 +15,12 @@ UPLOAD_SESSIONS = {}
 
 os.makedirs(STORAGE_DIR, exist_ok=True)
 
-
+def file_checksum(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        while chunk := f.read(8192):
+            h.update(chunk)
+    return h.hexdigest()
 # ---------------------------------------------------
 # Create Upload Session
 # ---------------------------------------------------
@@ -83,10 +90,25 @@ def complete_upload(session_id: str):
     try:
         final_file = merge_chunks(session_id)
 
-        # 🔥 Store metadata in DB
+        # 🔥 compute checksum
+        hash_val = file_checksum(final_file)
+
+        # 🔥 check reuse
+        existing = get_video_by_checksum(hash_val)
+        if existing:
+            UPLOAD_SESSIONS[session_id]["status"] = "completed"
+
+            return {
+                "status": "reused existing asset",
+                "video_id": existing["video_id"],
+                "file": existing["file_path"]
+            }
+
+        # 🔥 create new video
         video_id = create_video(
-            owner="test_user",          # later from auth
-            file_path=final_file
+            owner="test_user",
+            file_path=final_file,
+            checksum=hash_val
         )
 
         UPLOAD_SESSIONS[session_id]["status"] = "completed"
@@ -99,8 +121,6 @@ def complete_upload(session_id: str):
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-
-
 # ---------------------------------------------------
 # Upload Status (for resume)
 # ---------------------------------------------------
@@ -129,3 +149,17 @@ def upload_status(session_id: str):
 def get_videos():
     return {"videos": list_videos()}
 
+
+@router.get("/playback-url/{video_id}")
+def playback_url(video_id: str):
+    video = get_video(video_id)
+
+    if not video:
+        return {"error": "Video not found"}
+
+    playback = f"http://127.0.0.1:8001/play/{video_id}"
+
+    return {
+        "video_id": video_id,
+        "playback_url": playback
+    }

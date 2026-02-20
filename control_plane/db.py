@@ -9,6 +9,7 @@ def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
+    # Create table with checksum column
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS videos (
         video_id TEXT PRIMARY KEY,
@@ -16,7 +17,8 @@ def init_db():
         file_path TEXT,
         version INTEGER,
         status TEXT,
-        created_at TEXT
+        created_at TEXT,
+        checksum TEXT
     )
     """)
 
@@ -24,22 +26,25 @@ def init_db():
     conn.close()
 
 
-def create_video(owner: str, file_path: str):
+def create_video(owner: str, file_path: str, checksum: str):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     video_id = str(uuid.uuid4())
 
     cursor.execute("""
-    INSERT INTO videos (video_id, owner, file_path, version, status, created_at)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO videos (
+        video_id, owner, file_path, version, status, created_at, checksum
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?)
     """, (
         video_id,
         owner,
         file_path,
         1,
         "uploaded",
-        datetime.utcnow().isoformat()
+        datetime.utcnow().isoformat(),
+        checksum
     ))
 
     conn.commit()
@@ -48,15 +53,31 @@ def create_video(owner: str, file_path: str):
     return video_id
 
 
-def list_videos():
+def get_video_by_checksum(checksum: str):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    cursor.execute("SELECT * FROM videos")
-    rows = cursor.fetchall()
+    cursor.execute("""
+        SELECT video_id, owner, file_path, version, status, created_at
+        FROM videos
+        WHERE checksum = ?
+    """, (checksum,))
 
+    row = cursor.fetchone()
     conn.close()
-    return rows
+
+    if not row:
+        return None
+
+    return {
+        "video_id": row[0],
+        "owner": row[1],
+        "file_path": row[2],
+        "version": row[3],
+        "status": row[4],
+        "created_at": row[5]
+    }
+
 
 def list_videos():
     conn = sqlite3.connect(DB_PATH)
@@ -84,6 +105,7 @@ def list_videos():
 
     return videos
 
+
 def get_video(video_id: str):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -108,4 +130,3 @@ def get_video(video_id: str):
         "status": row[4],
         "created_at": row[5]
     }
-
