@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { X, Upload, Check, Loader2, AlertCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useCurrentAccount, useSignAndExecuteTransaction } from "@mysten/dapp-kit";
+import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
 import { Transaction } from "@mysten/sui/transactions";
 
 const CONTROL_PLANE = "http://127.0.0.1:8000";
@@ -17,6 +17,7 @@ export default function UploadModal({ onClose, onSuccess }: { onClose: () => voi
     const [error, setError] = useState("");
     const account = useCurrentAccount();
     const { mutateAsync: signAndExecuteTransaction } = useSignAndExecuteTransaction();
+    const suiClient = useSuiClient();
 
     const handleUpload = async () => {
         if (!file) return;
@@ -70,16 +71,43 @@ export default function UploadModal({ onClose, onSuccess }: { onClose: () => voi
                     ]
                 });
 
-                await signAndExecuteTransaction({
-                    transaction: tx,
-                });
-            }
+                signAndExecuteTransaction(
+                    { transaction: tx },
+                    {
+                        onSuccess: (txRes) => {
+                            setStatus("processing"); // keep processing while waiting for chain
 
-            setStatus("success");
-            setTimeout(() => {
-                onSuccess();
-                onClose();
-            }, 2000);
+                            // Wait for the transaction to actually be processed on the chain
+                            suiClient.waitForTransaction({
+                                digest: txRes.digest,
+                                options: { showEffects: true }
+                            }).then((txResult) => {
+                                console.log("Transaction finalized on-chain:", txResult);
+                                setStatus("success");
+                                setTimeout(() => {
+                                    onSuccess();
+                                    onClose();
+                                }, 2000);
+                            }).catch(err => {
+                                console.error("Error waiting for tx:", err);
+                                setError("Transaction signed but validation timed out.");
+                                setStatus("error");
+                            });
+                        },
+                        onError: (e) => {
+                            console.error("Wallet transaction failed:", e);
+                            setError("Wallet transaction rejected or failed.");
+                            setStatus("error");
+                        }
+                    }
+                );
+            } else {
+                setStatus("success");
+                setTimeout(() => {
+                    onSuccess();
+                    onClose();
+                }, 2000);
+            }
 
         } catch (err: any) {
             console.error("Upload error:", err);
