@@ -36,7 +36,7 @@ def store_blob(data: bytes, epochs: int = 1) -> str:
     Stores a blob in Walrus using HTTP endpoints (standard lib).
     Returns the newly created blob_id as a string.
     """
-    url = f"{PUBLISHER_URL}/v1/store?epochs={epochs}"
+    url = f"{PUBLISHER_URL}/v1/blobs?epochs={epochs}"
     req = urllib.request.Request(url, data=data, method="PUT")
     
     try:
