@@ -60,7 +60,7 @@ def read_blob(blob_id: str) -> bytes:
     """
     Retrieves a blob's raw bytes from Walrus using HTTP endpoints.
     """
-    url = f"{AGGREGATOR_URL}/v1/{blob_id}"
+    url = f"{AGGREGATOR_URL}/v1/blobs/{blob_id}"
     req = urllib.request.Request(url, method="GET")
     req.add_header("User-Agent", "WalrusVideoSDK/1.0")
     
