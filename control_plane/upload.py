@@ -272,6 +272,18 @@ def complete_upload(session_id: str, owner: Optional[str] = "test_user"):
 
 
 # ---------------------------------------------------
+# HLS MANIFEST (for data plane to fetch over HTTP)
+# ---------------------------------------------------
+@router.get("/hls-manifest/{video_id}")
+def hls_manifest(video_id: str):
+    manifest_path = os.path.join(HLS_DIR, video_id, "manifest.json")
+    if not os.path.exists(manifest_path):
+        raise HTTPException(status_code=404, detail="HLS manifest not found")
+    with open(manifest_path, "r") as f:
+        return json.load(f)
+
+
+# ---------------------------------------------------
 # LIST VIDEOS
 # ---------------------------------------------------
 @router.get("/videos")

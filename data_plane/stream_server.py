@@ -9,6 +9,10 @@ from data_plane.aggregator import stream_byte_range
 
 import os
 import json
+import urllib.request
+import urllib.error
+
+CONTROL_PLANE_URL = os.environ.get("CONTROL_PLANE_URL", "http://127.0.0.1:8000")
 
 app = FastAPI()
 
@@ -122,9 +126,11 @@ def serve_hls_file(video_id: str, file_path: str, request: Request):
     if requested_path.startswith("..") or os.path.isabs(requested_path):
         raise HTTPException(400, "Invalid file path")
 
-    # 1. Check if we have a stateless manifest entry for this file
+    # 1. Check if we have a local manifest entry for this file
     manifest_path = os.path.join(HLS_DIR, video_id, "manifest.json")
     blob_id = None
+    
+    # Try local disk first
     if os.path.exists(manifest_path):
         try:
             with open(manifest_path, "r") as f:
@@ -133,6 +139,27 @@ def serve_hls_file(video_id: str, file_path: str, request: Request):
             blob_id = hls_assets.get(requested_path)
         except json.JSONDecodeError:
             print(f"[ERROR] Corrupted or empty manifest at {manifest_path}")
+            blob_id = None
+    else:
+        # Fetch manifest from control plane over HTTP (production: separate servers)
+        try:
+            manifest_url = f"{CONTROL_PLANE_URL}/hls-manifest/{video_id}"
+            print(f"[REMOTE] Fetching HLS manifest from {manifest_url}")
+            req = urllib.request.Request(manifest_url, method="GET")
+            req.add_header("User-Agent", "WalrusDataPlane/1.0")
+            with urllib.request.urlopen(req) as response:
+                manifest = json.loads(response.read().decode('utf-8'))
+            
+            # Cache locally for subsequent segment requests
+            os.makedirs(os.path.join(HLS_DIR, video_id), exist_ok=True)
+            with open(manifest_path, "w") as f:
+                json.dump(manifest, f, indent=2)
+            
+            hls_assets = manifest.get("hls_assets", {})
+            blob_id = hls_assets.get(requested_path)
+            print(f"[REMOTE] Cached manifest with {len(hls_assets)} assets")
+        except Exception as e:
+            print(f"[ERROR] Failed to fetch HLS manifest from control plane: {e}")
             blob_id = None
 
     if blob_id:

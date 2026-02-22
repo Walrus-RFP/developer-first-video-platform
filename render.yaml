@@ -24,3 +24,5 @@ services:
         value: https://aggregator.walrus-testnet.walrus.space
       - key: PUBLISHER_URL
         value: https://publisher.walrus-testnet.walrus.space
+      - key: CONTROL_PLANE_URL
+        value: https://walrus-control-plane.onrender.com
