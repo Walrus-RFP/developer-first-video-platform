@@ -137,6 +137,7 @@ def merge_chunks(session_id: str):
     print(f"[MERGE] Fetching manifest from {manifest_url}")
     try:
         req = urllib.request.Request(manifest_url, method="GET")
+        req.add_header("User-Agent", "WalrusControlPlane/1.0")
         with urllib.request.urlopen(req) as response:
             manifest = json.loads(response.read().decode('utf-8'))
     except urllib.error.HTTPError as e:

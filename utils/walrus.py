@@ -38,6 +38,7 @@ def store_blob(data: bytes, epochs: int = 1) -> str:
     """
     url = f"{PUBLISHER_URL}/v1/blobs?epochs={epochs}"
     req = urllib.request.Request(url, data=data, method="PUT")
+    req.add_header("User-Agent", "WalrusVideoSDK/1.0")
     
     try:
         with urllib.request.urlopen(req) as response:
@@ -61,6 +62,7 @@ def read_blob(blob_id: str) -> bytes:
     """
     url = f"{AGGREGATOR_URL}/v1/{blob_id}"
     req = urllib.request.Request(url, method="GET")
+    req.add_header("User-Agent", "WalrusVideoSDK/1.0")
     
     try:
         with urllib.request.urlopen(req) as response:
