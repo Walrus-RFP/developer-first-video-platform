@@ -3,7 +3,8 @@
 import React, { useState } from "react";
 import { X, Upload, Check, Loader2, AlertCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useCurrentAccount } from "@mysten/dapp-kit";
+import { useCurrentAccount, useSignAndExecuteTransaction } from "@mysten/dapp-kit";
+import { Transaction } from "@mysten/sui/transactions";
 
 const CONTROL_PLANE = "http://127.0.0.1:8000";
 const DATA_PLANE = "http://127.0.0.1:8001";
@@ -15,6 +16,7 @@ export default function UploadModal({ onClose, onSuccess }: { onClose: () => voi
     const [progress, setProgress] = useState(0);
     const [error, setError] = useState("");
     const account = useCurrentAccount();
+    const { mutateAsync: signAndExecuteTransaction } = useSignAndExecuteTransaction();
 
     const handleUpload = async () => {
         if (!file) return;
@@ -53,6 +55,24 @@ export default function UploadModal({ onClose, onSuccess }: { onClose: () => voi
             if (!completeResp.ok) {
                 const errorData = await completeResp.json().catch(() => ({ detail: "Upload completion failed" }));
                 throw new Error(errorData.detail || "Upload completion failed");
+            }
+
+            const completeData = await completeResp.json();
+
+            // 4. Sign and execute on-chain transaction
+            if (account && completeData.sui_package_id && completeData.sui_registry_id) {
+                const tx = new Transaction();
+                tx.moveCall({
+                    target: `${completeData.sui_package_id}::video_registry::register_video`,
+                    arguments: [
+                        tx.object(completeData.sui_registry_id),
+                        tx.pure.string(completeData.video_id)
+                    ]
+                });
+
+                await signAndExecuteTransaction({
+                    transaction: tx,
+                });
             }
 
             setStatus("success");

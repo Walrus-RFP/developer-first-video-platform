@@ -240,31 +240,17 @@ def complete_upload(session_id: str, owner: Optional[str] = "test_user"):
         )
         
         # ---------------------------------------------------
-        # ON-CHAIN REGISTRATION (Optional/Fail-soft)
+        # PREPARE ON-CHAIN REGISTRATION PARAMS
         # ---------------------------------------------------
-        try:
-            from utils.sui import PACKAGE_ID, REGISTRY_ID
-            print(f"[ON-CHAIN] Registering video {video_id} on Sui...")
-            cmd = [
-                "sui", "client", "call",
-                "--package", PACKAGE_ID,
-                "--module", "video_registry",
-                "--function", "register_video",
-                "--args", REGISTRY_ID, f"string:{video_id}",
-                "--gas-budget", "50000000"
-            ]
-            subprocess.run(cmd, capture_output=True, check=True)
-            print(f"[ON-CHAIN] Video {video_id} registered successfully.")
-        except Exception as e:
-            print(f"[ON-CHAIN WARNING] Registration failed: {e}")
-            # We don't fail the whole upload if Sui is down, 
-            # but usually for this RFP, we want it to work.
-        print(f"[COMPLETE] Success! Generated video_id {video_id}")
+        from utils.sui import PACKAGE_ID, REGISTRY_ID
+        print(f"[COMPLETE] Success! Generated video_id {video_id}. Preparing for client-side signature.")
 
         return {
             "status": "upload completed",
             "video_id": video_id,
-            "playlist": f"/hls/{video_id}/playlist.m3u8"
+            "playlist": f"/hls/{video_id}/playlist.m3u8",
+            "sui_package_id": PACKAGE_ID,
+            "sui_registry_id": REGISTRY_ID
         }
 
     except Exception as e:
