@@ -126,3 +126,24 @@ def get_video(video_id: str):
         "status": row[4],
         "created_at": row[5]
     }
+
+
+def get_db_stats():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT COUNT(*) FROM videos")
+    count = cursor.fetchone()[0]
+
+    # Simple estimate based on local HLS files (if any) or just count
+    cursor.execute("SELECT owner, COUNT(*) FROM videos GROUP BY owner")
+    owners = dict(cursor.fetchall())
+
+    conn.close()
+
+    return {
+        "total_videos": count,
+        "owner_distribution": owners,
+        "storage_backend": "Walrus",
+        "access_control": "Sui Move Registry"
+    }

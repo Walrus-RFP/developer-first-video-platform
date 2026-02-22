@@ -26,6 +26,12 @@ app.include_router(upload_router)
 def root():
     return {"message": "Control plane running"}
 
+
+@app.get("/metrics")
+def metrics():
+    from control_plane.db import get_db_stats
+    return get_db_stats()
+
 # serve demo player
 app.mount("/demo", StaticFiles(directory="demo", html=True), name="demo")
 
