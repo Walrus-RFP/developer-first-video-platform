@@ -54,7 +54,7 @@ def is_authorized(video_id: str, user_address: str) -> bool:
             "--package", PACKAGE_ID,
             "--module", "video_registry",
             "--function", "is_authorized",
-            "--args", REGISTRY_ID, f"string:{video_id}", user_address,
+            "--args", REGISTRY_ID, video_id, user_address,
             "--dev-inspect",
             "--json" # this is important
         ]
