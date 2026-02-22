@@ -2,7 +2,8 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
-import { Play, Pause, Volume2, Maximize, X } from "lucide-react";
+import { Play, Pause, Volume2, Maximize, X, Copy, Check, Code2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface VideoPlayerProps {
     videoId: string;
@@ -14,6 +15,8 @@ export default function VideoPlayer({ videoId, playbackUrl, onClose }: VideoPlay
     const videoRef = useRef<HTMLVideoElement>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [progress, setProgress] = useState(0);
+    const [tab, setTab] = useState<"iframe" | "react" | "hlsjs">("iframe");
+    const [copied, setCopied] = useState(false);
 
     useEffect(() => {
         let isMounted = true;
@@ -77,49 +80,132 @@ export default function VideoPlayer({ videoId, playbackUrl, onClose }: VideoPlay
         }
     };
 
+    const getSnippet = () => {
+        if (tab === "iframe") {
+            return `<iframe\n  src="${playbackUrl}"\n  style="width: 100%; aspect-ratio: 16/9; border: none;"\n  allow="autoplay; fullscreen; encrypted-media"\n  allowfullscreen\n></iframe>`;
+        }
+        if (tab === "react") {
+            return `import React from 'react';\n\nexport default function Video() {\n  return (\n    <video \n      src="${playbackUrl}"\n      controls \n      autoPlay \n      className="w-full aspect-video"\n    />\n  );\n}`;
+        }
+        if (tab === "hlsjs") {
+            return `import Hls from 'hls.js';\n\nconst video = document.getElementById('video');\nif (Hls.isSupported()) {\n  const hls = new Hls();\n  hls.loadSource('${playbackUrl}');\n  hls.attachMedia(video);\n  hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());\n}`;
+        }
+        return "";
+    };
+
+    const handleCopy = () => {
+        navigator.clipboard.writeText(getSnippet());
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
     return (
-        <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-2xl flex items-center justify-center p-4 md:p-12">
+        <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-2xl flex items-center justify-center p-4 xl:p-12 overflow-y-auto">
             <button
                 onClick={onClose}
-                className="absolute top-8 right-8 text-white/40 hover:text-white transition-colors"
+                className="fixed top-8 right-8 z-[110] text-white/40 hover:text-white transition-colors bg-white/5 p-2 rounded-full backdrop-blur-md"
             >
-                <X size={32} strokeWidth={1} />
+                <X size={24} strokeWidth={2} />
             </button>
 
-            <div className="w-full max-w-5xl aspect-video relative group glass-card rounded-3xl overflow-hidden shadow-2xl">
-                <video
-                    ref={videoRef}
-                    className="w-full h-full object-contain"
-                    onTimeUpdate={handleTimeUpdate}
-                    onClick={togglePlay}
-                />
+            <div className="w-full max-w-7xl grid grid-cols-1 xl:grid-cols-5 gap-8 my-auto">
+                {/* Left Side: Video Player */}
+                <div className="xl:col-span-3 aspect-video relative group glass-card rounded-3xl overflow-hidden shadow-2xl bg-black">
+                    <video
+                        ref={videoRef}
+                        className="w-full h-full object-contain"
+                        onTimeUpdate={handleTimeUpdate}
+                        onClick={togglePlay}
+                    />
 
-                {/* Custom Minimal Controls */}
-                <div className="absolute inset-x-0 bottom-0 p-8 pt-20 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500">
-                    <div className="space-y-6">
-                        <div className="h-1 w-full bg-white/10 rounded-full overflow-hidden cursor-pointer group/progress">
-                            <div
-                                className="h-full bg-white transition-all duration-150"
-                                style={{ width: `${progress}%` }}
-                            />
-                        </div>
+                    {/* Custom Minimal Controls */}
+                    <div className="absolute inset-x-0 bottom-0 p-8 pt-20 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500">
+                        <div className="space-y-6">
+                            <div className="h-1 w-full bg-white/10 rounded-full overflow-hidden cursor-pointer group/progress">
+                                <div
+                                    className="h-full bg-white transition-all duration-150"
+                                    style={{ width: `${progress}%` }}
+                                />
+                            </div>
 
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-8">
-                                <button onClick={togglePlay} className="hover:scale-110 transition-transform">
-                                    {isPlaying ? <Pause fill="white" size={24} /> : <Play fill="white" size={24} />}
-                                </button>
-                                <div className="flex items-center gap-4 opacity-40 hover:opacity-100 transition-opacity">
-                                    <Volume2 size={20} />
-                                    <div className="w-20 h-1 bg-white/20 rounded-full" />
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-8">
+                                    <button onClick={togglePlay} className="hover:scale-110 transition-transform">
+                                        {isPlaying ? <Pause fill="white" size={24} /> : <Play fill="white" size={24} />}
+                                    </button>
+                                    <div className="flex items-center gap-4 opacity-40 hover:opacity-100 transition-opacity">
+                                        <Volume2 size={20} />
+                                        <div className="w-20 h-1 bg-white/20 rounded-full" />
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-6 opacity-40">
+                                    <span className="text-xs font-mono tracking-tighter">1080P / ABR</span>
+                                    <Maximize size={20} className="hover:text-white transition-colors cursor-pointer" />
                                 </div>
                             </div>
-
-                            <div className="flex items-center gap-6 opacity-40">
-                                <span className="text-xs font-mono tracking-tighter">1080P / ABR</span>
-                                <Maximize size={20} className="hover:text-white transition-colors cursor-pointer" />
-                            </div>
                         </div>
+                    </div>
+                </div>
+
+                {/* Right Side: Embed Code Snippets */}
+                <div className="xl:col-span-2 flex flex-col glass-card rounded-3xl p-8 border border-white/5 space-y-6 bg-white/[0.02]">
+                    <div className="space-y-1">
+                        <div className="flex items-center gap-3 text-white">
+                            <Code2 size={24} className="text-blue-400" />
+                            <h3 className="text-2xl font-bold tracking-tight">Embed this video</h3>
+                        </div>
+                        <p className="text-muted text-sm ml-9">Stream securely directly into your application.</p>
+                    </div>
+
+                    {/* Tabs */}
+                    <div className="flex gap-6 border-b border-white/10 pb-0 text-xs font-semibold tracking-widest uppercase">
+                        <button
+                            className={`pb-3 px-1 transition-colors relative ${tab === 'iframe' ? 'text-white' : 'text-muted hover:text-white/70'}`}
+                            onClick={() => setTab('iframe')}
+                        >
+                            IFrame
+                            {tab === 'iframe' && <motion.div layoutId="underline" className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-400" />}
+                        </button>
+                        <button
+                            className={`pb-3 px-1 transition-colors relative ${tab === 'react' ? 'text-white' : 'text-muted hover:text-white/70'}`}
+                            onClick={() => setTab('react')}
+                        >
+                            React Component
+                            {tab === 'react' && <motion.div layoutId="underline" className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-400" />}
+                        </button>
+                        <button
+                            className={`pb-3 px-1 transition-colors relative ${tab === 'hlsjs' ? 'text-white' : 'text-muted hover:text-white/70'}`}
+                            onClick={() => setTab('hlsjs')}
+                        >
+                            Core HLS.js
+                            {tab === 'hlsjs' && <motion.div layoutId="underline" className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-400" />}
+                        </button>
+                    </div>
+
+                    {/* Code Block */}
+                    <div className="relative bg-black/40 rounded-2xl p-6 font-mono text-sm overflow-x-auto text-white/80 border border-white/5 flex-grow shadow-inner">
+                        <button
+                            onClick={handleCopy}
+                            className="absolute top-4 right-4 text-xs bg-white/10 hover:bg-white/20 px-3 py-2 rounded-lg transition-colors flex items-center gap-2 text-white"
+                        >
+                            {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
+                            {copied ? "Copied" : "Copy"}
+                        </button>
+                        <AnimatePresence mode="wait">
+                            <motion.pre
+                                key={tab}
+                                initial={{ opacity: 0, y: 5 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -5 }}
+                                transition={{ duration: 0.15 }}
+                                className="pt-8 whitespace-pre-wrap word-break-all"
+                            >
+                                <code className="text-[13px] leading-relaxed block text-blue-100/70">
+                                    {getSnippet()}
+                                </code>
+                            </motion.pre>
+                        </AnimatePresence>
                     </div>
                 </div>
             </div>
