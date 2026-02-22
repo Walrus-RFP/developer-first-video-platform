@@ -7,7 +7,11 @@ import json
 import hashlib
 import shutil
 import subprocess
+import urllib.request
+import urllib.error
 from utils.walrus import read_blob, store_blob, with_retries
+
+DATA_PLANE_URL = os.environ.get("DATA_PLANE_URL", "http://127.0.0.1:8001")
 
 from control_plane.db import (
     create_video,
@@ -126,13 +130,19 @@ def convert_to_hls(input_path: str, video_id: str):
 def merge_chunks(session_id: str):
 
     session_dir = os.path.join(STORAGE_DIR, session_id)
-    manifest_path = os.path.join(session_dir, "manifest.json")
+    os.makedirs(session_dir, exist_ok=True)
 
-    if not os.path.exists(manifest_path):
-        raise Exception("manifest missing")
-
-    with open(manifest_path) as f:
-        manifest = json.load(f)
+    # Fetch manifest from the data plane over HTTP (separate server in production)
+    manifest_url = f"{DATA_PLANE_URL}/manifest/{session_id}"
+    print(f"[MERGE] Fetching manifest from {manifest_url}")
+    try:
+        req = urllib.request.Request(manifest_url, method="GET")
+        with urllib.request.urlopen(req) as response:
+            manifest = json.loads(response.read().decode('utf-8'))
+    except urllib.error.HTTPError as e:
+        raise Exception(f"manifest missing (data plane returned {e.code})")
+    except Exception as e:
+        raise Exception(f"Failed to fetch manifest from data plane: {e}")
 
     chunks = sorted(manifest["chunks"], key=lambda x: x["chunk_index"])
 

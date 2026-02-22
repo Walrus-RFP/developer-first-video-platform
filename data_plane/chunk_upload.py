@@ -57,3 +57,15 @@ async def upload_chunk(
         json.dump(manifest, f, indent=2)
 
     return {"status": "chunk stored", "chunk_index": chunk_index}
+
+
+@router.get("/manifest/{session_id}")
+def get_manifest(session_id: str):
+    session_dir = os.path.join(STORAGE_DIR, session_id)
+    manifest_path = os.path.join(session_dir, "manifest.json")
+
+    if not os.path.exists(manifest_path):
+        raise HTTPException(status_code=404, detail="manifest not found")
+
+    with open(manifest_path, "r") as f:
+        return json.load(f)

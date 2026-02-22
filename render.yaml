@@ -8,6 +8,8 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.10.0
+      - key: DATA_PLANE_URL
+        value: https://walrus-data-plane.onrender.com
 
   # Data Plane (Decentralized HLS Streaming)
   - type: web
