@@ -2,8 +2,10 @@ import hashlib
 import hmac
 import time
 import urllib.parse
+import os
 
 SECRET = "super_secret_key_change_me"
+DATA_PLANE_URL = os.environ.get("DATA_PLANE_URL", "http://127.0.0.1:8001")
 
 
 # =====================================================
@@ -17,7 +19,7 @@ def create_signed_url(video_id: str, file: str = "playlist.m3u8", expiry_seconds
     sig = hmac.new(SECRET.encode(), message, hashlib.sha256).hexdigest()
 
     return (
-        f"http://127.0.0.1:8001/play/{video_id}/{file}"
+        f"{DATA_PLANE_URL}/play/{video_id}/{file}"
         f"?exp={exp}&sig={sig}"
     )
 
