@@ -3,6 +3,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Play, Info, ArrowUpRight } from "lucide-react";
 import { useState, useEffect } from "react";
+import { useCurrentAccount } from "@mysten/dapp-kit";
 import UploadModal from "@/components/UploadModal";
 import VideoPlayer from "@/components/VideoPlayer";
 
@@ -11,13 +12,19 @@ const API_BASE = "http://127.0.0.1:8000";
 export default function Home() {
     const [videos, setVideos] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [viewType, setViewType] = useState<"all" | "mine">("all");
     const [showUpload, setShowUpload] = useState(false);
     const [activePlayback, setActivePlayback] = useState<{ id: string, url: string } | null>(null);
+    const account = useCurrentAccount();
 
-    const fetchVideos = async () => {
+    const fetchVideos = async (type = viewType) => {
         try {
             setLoading(true);
-            const res = await fetch(`${API_BASE}/videos`);
+            const url = type === 'mine' && account
+                ? `${API_BASE}/videos?owner=${account.address}`
+                : `${API_BASE}/videos`;
+
+            const res = await fetch(url);
             const data = await res.json();
             setVideos(data.videos || []);
         } catch (err) {
@@ -28,16 +35,21 @@ export default function Home() {
     };
 
     useEffect(() => {
-        fetchVideos();
-    }, []);
+        fetchVideos(viewType);
+    }, [viewType, account]);
 
     const handlePlay = async (videoId: string) => {
         try {
-            const res = await fetch(`${API_BASE}/playback-url/${videoId}`);
+            const url = account ? `${API_BASE}/playback-url/${videoId}?user_address=${account.address}` : `${API_BASE}/playback-url/${videoId}`;
+            const res = await fetch(url);
+            if (!res.ok) {
+                if (res.status === 403) throw new Error("Permission denied. Ensure wallet holds access policy.");
+                throw new Error("Playback failed");
+            }
             const data = await res.json();
             setActivePlayback({ id: videoId, url: data.playlist });
-        } catch (err) {
-            alert("Failed to get playback authorization.");
+        } catch (err: any) {
+            alert(err.message || "Failed to get playback authorization.");
         }
     };
 
@@ -72,12 +84,33 @@ export default function Home() {
 
             {/* Video Grid */}
             <section className="space-y-8">
-                <div className="flex items-end justify-between border-b border-white/5 pb-4">
-                    <h2 className="text-sm font-semibold tracking-widest uppercase opacity-40">Featured Assets</h2>
+                <div className="flex flex-col md:flex-row items-start md:items-end justify-between border-b border-white/5 pb-4 gap-4">
+                    <div className="flex gap-6">
+                        <button
+                            onClick={() => setViewType("all")}
+                            className={`text-sm font-semibold tracking-widest uppercase transition-colors ${viewType === 'all' ? 'text-white' : 'text-muted hover:text-white/70'}`}
+                        >
+                            Global Feed
+                        </button>
+                        <button
+                            onClick={() => setViewType("mine")}
+                            className={`text-sm font-semibold tracking-widest uppercase transition-colors ${viewType === 'mine' ? 'text-white' : 'text-muted hover:text-white/70'}`}
+                        >
+                            My Library
+                        </button>
+                    </div>
                     <span className="text-xs text-muted tracking-tight">{videos.length} videos available</span>
                 </div>
 
-                {loading ? (
+                {viewType === 'mine' && !account ? (
+                    <div className="py-20 text-center border border-dashed border-white/10 rounded-2xl glass-card">
+                        <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Info className="text-muted" size={24} />
+                        </div>
+                        <h3 className="text-xl font-bold mb-2">Wallet Disconnected</h3>
+                        <p className="text-muted max-w-sm mx-auto">Please connect your Slush wallet using the button above to view and manage your private video assets.</p>
+                    </div>
+                ) : loading ? (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                         {[1, 2, 3].map(i => (
                             <div key={i} className="aspect-video bg-white/5 animate-pulse rounded-lg" />

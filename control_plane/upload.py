@@ -154,9 +154,11 @@ def merge_chunks(session_id: str):
 # ---------------------------------------------------
 # COMPLETE UPLOAD
 # ---------------------------------------------------
+from typing import Optional
+
 @router.post("/complete-upload/{session_id}")
-def complete_upload(session_id: str):
-    print(f"[COMPLETE] Starting completion for session {session_id}")
+def complete_upload(session_id: str, owner: Optional[str] = "test_user"):
+    print(f"[COMPLETE] Starting completion for session {session_id} for owner {owner}")
     try:
         merged = merge_chunks(session_id)
         print(f"[COMPLETE] Merged chunks for {session_id}")
@@ -232,7 +234,7 @@ def complete_upload(session_id: str):
 
         create_video(
             video_id=video_id,
-            owner="test_user",
+            owner=owner,
             file_path=final_mp4,
             checksum=checksum,
         )
@@ -276,8 +278,8 @@ def complete_upload(session_id: str):
 # LIST VIDEOS
 # ---------------------------------------------------
 @router.get("/videos")
-def videos():
-    return {"videos": list_videos()}
+def videos(owner: Optional[str] = None):
+    return {"videos": list_videos(owner=owner)}
 
 
 # ---------------------------------------------------

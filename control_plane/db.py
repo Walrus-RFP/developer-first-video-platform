@@ -76,15 +76,25 @@ def get_video_by_checksum(checksum: str):
     }
 
 
-def list_videos():
+from typing import Optional
+
+def list_videos(owner: Optional[str] = None):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    cursor.execute("""
-        SELECT video_id, owner, file_path, version, status, created_at
-        FROM videos
-        ORDER BY created_at DESC
-    """)
+    if owner:
+        cursor.execute("""
+            SELECT video_id, owner, file_path, version, status, created_at
+            FROM videos
+            WHERE owner = ?
+            ORDER BY created_at DESC
+        """, (owner,))
+    else:
+        cursor.execute("""
+            SELECT video_id, owner, file_path, version, status, created_at
+            FROM videos
+            ORDER BY created_at DESC
+        """)
 
     rows = cursor.fetchall()
     conn.close()

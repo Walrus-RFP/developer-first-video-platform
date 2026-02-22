@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { X, Upload, Check, Loader2, AlertCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useCurrentAccount } from "@mysten/dapp-kit";
 
 const CONTROL_PLANE = "http://127.0.0.1:8000";
 const DATA_PLANE = "http://127.0.0.1:8001";
@@ -13,6 +14,7 @@ export default function UploadModal({ onClose, onSuccess }: { onClose: () => voi
     const [status, setStatus] = useState<"idle" | "uploading" | "processing" | "success" | "error">("idle");
     const [progress, setProgress] = useState(0);
     const [error, setError] = useState("");
+    const account = useCurrentAccount();
 
     const handleUpload = async () => {
         if (!file) return;
@@ -45,7 +47,8 @@ export default function UploadModal({ onClose, onSuccess }: { onClose: () => voi
 
             // 3. Complete upload
             setStatus("processing");
-            const completeResp = await fetch(`${CONTROL_PLANE}/complete-upload/${sessionId}`, { method: "POST" });
+            const ownerParam = account ? `?owner=${account.address}` : "";
+            const completeResp = await fetch(`${CONTROL_PLANE}/complete-upload/${sessionId}${ownerParam}`, { method: "POST" });
 
             if (!completeResp.ok) {
                 const errorData = await completeResp.json().catch(() => ({ detail: "Upload completion failed" }));
