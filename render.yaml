@@ -14,7 +14,7 @@ services:
     name: walrus-data-plane
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn data_plane.main:app --host 0.0.0.0 --port $PORT
+    startCommand: uvicorn data_plane.stream_server:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
         value: 3.10.0
