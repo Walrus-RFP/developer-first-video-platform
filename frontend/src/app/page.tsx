@@ -7,7 +7,7 @@ import { useCurrentAccount } from "@mysten/dapp-kit";
 import UploadModal from "@/components/UploadModal";
 import VideoPlayer from "@/components/VideoPlayer";
 
-const API_BASE = "http://127.0.0.1:8000";
+const API_BASE = process.env.NEXT_PUBLIC_CONTROL_PLANE_URL || "http://127.0.0.1:8000";
 
 export default function Home() {
     const [videos, setVideos] = useState<any[]>([]);

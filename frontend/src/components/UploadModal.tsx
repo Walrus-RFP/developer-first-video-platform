@@ -6,8 +6,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
 import { Transaction } from "@mysten/sui/transactions";
 
-const CONTROL_PLANE = "http://127.0.0.1:8000";
-const DATA_PLANE = "http://127.0.0.1:8001";
+const CONTROL_PLANE = process.env.NEXT_PUBLIC_CONTROL_PLANE_URL || "http://127.0.0.1:8000";
+const DATA_PLANE = process.env.NEXT_PUBLIC_DATA_PLANE_URL || "http://127.0.0.1:8001";
 const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
 
 export default function UploadModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: () => void }) {
