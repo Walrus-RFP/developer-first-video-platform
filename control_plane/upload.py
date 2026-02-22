@@ -17,6 +17,7 @@ from control_plane.db import (
 )
 
 from utils.signing import create_signed_url
+from utils.sui import is_authorized as check_sui_auth
 
 router = APIRouter()
 
@@ -235,6 +236,27 @@ def complete_upload(session_id: str):
             file_path=final_mp4,
             checksum=checksum,
         )
+        
+        # ---------------------------------------------------
+        # ON-CHAIN REGISTRATION (Optional/Fail-soft)
+        # ---------------------------------------------------
+        try:
+            from utils.sui import PACKAGE_ID, REGISTRY_ID
+            print(f"[ON-CHAIN] Registering video {video_id} on Sui...")
+            cmd = [
+                "sui", "client", "call",
+                "--package", PACKAGE_ID,
+                "--module", "video_registry",
+                "--function", "register_video",
+                "--args", REGISTRY_ID, f"string:{video_id}",
+                "--gas-budget", "50000000"
+            ]
+            subprocess.run(cmd, capture_output=True, check=True)
+            print(f"[ON-CHAIN] Video {video_id} registered successfully.")
+        except Exception as e:
+            print(f"[ON-CHAIN WARNING] Registration failed: {e}")
+            # We don't fail the whole upload if Sui is down, 
+            # but usually for this RFP, we want it to work.
         print(f"[COMPLETE] Success! Generated video_id {video_id}")
 
         return {
@@ -262,11 +284,21 @@ def videos():
 # SIGNED PLAYBACK URL
 # ---------------------------------------------------
 @router.get("/playback-url/{video_id}")
-def playback(video_id: str):
+def playback(video_id: str, user_address: str = None):
 
     video = get_video(video_id)
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
+
+    # ---------------------------------------------------
+    # ON-CHAIN PERMISSION CHECK
+    # ---------------------------------------------------
+    if user_address:
+        print(f"[AUTH] Checking SUI permission for {user_address} on {video_id}...")
+        if not check_sui_auth(video_id, user_address):
+            print(f"[AUTH] Permission denied for {user_address}")
+            raise HTTPException(status_code=403, detail="On-chain permission denied")
+        print(f"[AUTH] Permission granted.")
 
     signed = create_signed_url(video_id, "playlist.m3u8")
 
