@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Walrus Video Player</title>
+    <style>
+        body {
+            font-family: Arial;
+            background: #111;
+            color: white;
+            text-align: center;
+            padding-top: 40px;
+        }
+        video {
+            width: 70%;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        select, button {
+            padding: 10px;
+            margin: 10px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+
+<h1>🎬 Walrus Video Platform Demo</h1>
+
+<p>Select a video:</p>
+
+<select id="videoSelect"></select>
+<br>
+<button onclick="loadVideo()">Play</button>
+
+<br><br>
+
+<video id="player" controls></video>
+
+<script>
+const CONTROL_PLANE = "http://127.0.0.1:8000";
+
+async function loadVideos() {
+    const res = await fetch(`${CONTROL_PLANE}/videos`);
+    const data = await res.json();
+
+    const select = document.getElementById("videoSelect");
+
+    data.videos.forEach(v => {
+        const opt = document.createElement("option");
+        opt.value = v.video_id;
+        opt.text = `${v.video_id.slice(0,8)}... (${v.created_at})`;
+        select.appendChild(opt);
+    });
+}
+
+async function loadVideo() {
+    const id = document.getElementById("videoSelect").value;
+
+    const res = await fetch(`${CONTROL_PLANE}/playback-url/${id}`);
+    const data = await res.json();
+
+    document.getElementById("player").src = data.playlist;
+}
+
+loadVideos();
+</script>
+
+</body>
+</html>

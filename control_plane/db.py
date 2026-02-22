@@ -1,5 +1,4 @@
 import sqlite3
-import uuid
 from datetime import datetime
 
 DB_PATH = "video_metadata.db"
@@ -9,7 +8,6 @@ def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    # Create table with checksum column
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS videos (
         video_id TEXT PRIMARY KEY,
@@ -26,11 +24,10 @@ def init_db():
     conn.close()
 
 
-def create_video(owner: str, file_path: str, checksum: str):
+# ⭐ FIXED: accept video_id from upload.py
+def create_video(video_id: str, owner: str, file_path: str, checksum: str):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-
-    video_id = str(uuid.uuid4())
 
     cursor.execute("""
     INSERT INTO videos (
@@ -92,18 +89,17 @@ def list_videos():
     rows = cursor.fetchall()
     conn.close()
 
-    videos = []
-    for r in rows:
-        videos.append({
+    return [
+        {
             "video_id": r[0],
             "owner": r[1],
             "file_path": r[2],
             "version": r[3],
             "status": r[4],
-            "created_at": r[5]
-        })
-
-    return videos
+            "created_at": r[5],
+        }
+        for r in rows
+    ]
 
 
 def get_video(video_id: str):

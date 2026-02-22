@@ -1,47 +1,38 @@
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse, FileResponse
 from data_plane.chunk_upload import router as chunk_router
 from control_plane.db import get_video
 from utils.signing import verify_signed_url
+from data_plane.cache import chunk_cache
+from data_plane.aggregator import stream_byte_range
 
 import os
 import json
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.include_router(chunk_router)
 
 STORAGE_DIR = "storage"
+HLS_DIR = os.path.join(STORAGE_DIR, "hls")
 
 
 @app.get("/")
 def root():
     return {"message": "Data plane running"}
+    
 
-
-# ---------------------------------------------------
-# Helper: get chunk paths from manifest
-# ---------------------------------------------------
-def get_chunk_paths(session_id: str):
-    session_dir = os.path.join(STORAGE_DIR, session_id)
-    manifest_path = os.path.join(session_dir, "manifest.json")
-
-    if not os.path.exists(manifest_path):
-        raise Exception("Manifest not found")
-
-    with open(manifest_path) as f:
-        manifest = json.load(f)
-
-    chunks = sorted(
-        manifest.get("chunks", []),
-        key=lambda c: c.get("chunk_index", 0)
-    )
-
-    return [os.path.join(session_dir, c["chunk_id"]) for c in chunks]
-
-
-# ---------------------------------------------------
-# Helper: byte range streaming
-# ---------------------------------------------------
+# =========================================================
+# BYTE RANGE STREAM (MP4 fallback)
+# =========================================================
 def range_stream(file_path, start, end):
     with open(file_path, "rb") as f:
         f.seek(start)
@@ -57,103 +48,161 @@ def range_stream(file_path, start, end):
             yield data
 
 
-# ---------------------------------------------------
-# Playback Endpoint
-# ---------------------------------------------------
+from data_plane.aggregator import stream_byte_range
+
+# =========================================================
+# MP4 SIGNED PLAYBACK
+# =========================================================
 @app.get("/play/{video_id}")
 def play_video(video_id: str, request: Request):
 
-    # ✅ 1. Verify signed URL
+    # verify signed URL
     if not verify_signed_url(video_id, request.query_params):
-        raise HTTPException(status_code=403, detail="Invalid or expired signed URL")
+        raise HTTPException(403, "Invalid or expired signed URL")
 
-    # ✅ 2. Fetch metadata
+    # The video metadata confirms the existence of the video, though
+    # the actual content is in Walrus chunks.
     video = get_video(video_id)
     if not video:
-        raise HTTPException(status_code=404, detail="Video not found")
+        raise HTTPException(404, "Video not found")
 
-    file_path = video["file_path"]
+    # Load the session manifest to find the total video size
+    manifest_path = os.path.join(HLS_DIR, video_id, "manifest.json")
+    if not os.path.exists(manifest_path):
+        raise HTTPException(404, "Manifest missing - cannot stream via chunks")
 
-    # =================================================
-    # CASE 1 — merged file exists → BYTE RANGE STREAM
-    # =================================================
-    if os.path.exists(file_path):
+    with open(manifest_path, "r") as f:
+        manifest = json.load(f)
 
-        file_size = os.path.getsize(file_path)
-        range_header = request.headers.get("range")
+    file_size = sum(c["size"] for c in manifest["chunks"])
+    
+    range_header = request.headers.get("range")
 
-        if range_header:
-            try:
-                bytes_range = range_header.replace("bytes=", "")
-                parts = bytes_range.split("-")
+    if range_header:
+        bytes_range = range_header.replace("bytes=", "")
+        parts = bytes_range.split("-")
 
-                start = int(parts[0]) if parts[0] else 0
-                end = int(parts[1]) if len(parts) > 1 and parts[1] else file_size - 1
+        start = int(parts[0]) if parts[0] else 0
+        end = int(parts[1]) if len(parts) > 1 and parts[1] else file_size - 1
+        end = min(end, file_size - 1)
 
-                if start >= file_size:
-                    raise HTTPException(status_code=416)
+        headers = {
+            "Content-Range": f"bytes {start}-{end}/{file_size}",
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(end - start + 1),
+            "Content-Type": "video/mp4",
+        }
 
-                end = min(end, file_size - 1)
-
-                headers = {
-                    "Content-Range": f"bytes {start}-{end}/{file_size}",
-                    "Accept-Ranges": "bytes",
-                    "Content-Length": str(end - start + 1),
-                    "Content-Type": "video/mp4",
-                }
-
-                return StreamingResponse(
-                    range_stream(file_path, start, end),
-                    status_code=206,
-                    headers=headers,
-                )
-
-            except Exception:
-                raise HTTPException(status_code=400, detail="Invalid Range header")
-
-        # no range → full stream
         return StreamingResponse(
-            range_stream(file_path, 0, file_size - 1),
-            headers={"Content-Type": "video/mp4"},
+            stream_byte_range(video_id, start, end),
+            status_code=206,
+            headers=headers,
         )
 
-    # =================================================
-    # CASE 2 — fallback chunk streaming
-    # =================================================
-    try:
-        session_id = os.path.basename(os.path.dirname(file_path))
-        chunk_paths = get_chunk_paths(session_id)
+    return StreamingResponse(
+        stream_byte_range(video_id, 0, file_size - 1),
+        headers={"Content-Type": "video/mp4"},
+    )
 
-        def stream():
-            for path in chunk_paths:
-                with open(path, "rb") as f:
-                    yield f.read()
 
-        return StreamingResponse(stream(), media_type="video/mp4")
+from fastapi import Response
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    
-    
+# =========================================================
+# HLS PLAYLIST + SEGMENT SERVING
+# =========================================================
+@app.get("/play/{video_id}/{file_path:path}")
+def serve_hls_file(video_id: str, file_path: str, request: Request):
+
+    # verify signature (the signing logic handles the root filename or the whole path)
+    if not verify_signed_url(video_id, request.query_params, file=file_path):
+        raise HTTPException(403, "Invalid or expired signed URL")
+
+    # Path traversal protection
+    requested_path = os.path.normpath(file_path)
+    if requested_path.startswith("..") or os.path.isabs(requested_path):
+        raise HTTPException(400, "Invalid file path")
+
+    # 1. Check if we have a stateless manifest entry for this file
+    manifest_path = os.path.join(HLS_DIR, video_id, "manifest.json")
+    blob_id = None
+    if os.path.exists(manifest_path):
+        try:
+            with open(manifest_path, "r") as f:
+                manifest = json.load(f)
+            hls_assets = manifest.get("hls_assets", {})
+            blob_id = hls_assets.get(requested_path)
+        except json.JSONDecodeError:
+            print(f"[ERROR] Corrupted or empty manifest at {manifest_path}")
+            blob_id = None
+
+    if blob_id:
+        print(f"[STATELESS] Serving {requested_path} from Walrus blob {blob_id}")
+        data = chunk_cache.get_chunk(blob_id)
+        
+        if requested_path.endswith(".m3u8"):
+            content = data.decode()
+            qs = str(request.query_params)
+            if qs:
+                import re
+                content = re.sub(r'([a-zA-Z0-9_\-\./]+\.ts)', rf'\1?{qs}', content)
+                content = re.sub(r'([a-zA-Z0-9_\-\./]+\.m3u8)', rf'\1?{qs}', content)
+            return Response(content=content, media_type="application/vnd.apple.mpegurl")
+
+        if requested_path.endswith(".ts"):
+            return Response(content=data, media_type="video/MP2T")
+            
+        return Response(content=data)
+
+    # 2. Fallback to Local Disk (for older uploads or if upload failed)
+    path = os.path.join(HLS_DIR, video_id, requested_path)
+
+    if not os.path.exists(path):
+        raise HTTPException(404, f"HLS file not found: {requested_path}")
+
+    # playlist vs segment
+    if requested_path.endswith(".m3u8"):
+        with open(path, "r") as f:
+            content = f.read()
+        qs = str(request.query_params)
+        if qs:
+            import re
+            content = re.sub(r'([a-zA-Z0-9_\-\./]+\.ts)', rf'\1?{qs}', content)
+            content = re.sub(r'([a-zA-Z0-9_\-\./]+\.m3u8)', rf'\1?{qs}', content)
+            
+        return Response(content=content, media_type="application/vnd.apple.mpegurl")
+
+    if requested_path.endswith(".ts"):
+        return FileResponse(path, media_type="video/MP2T")
+
+    return FileResponse(path)
+
+
+# =========================================================
+# HEAD request for video players
+# =========================================================
 @app.head("/play/{video_id}")
 def head_video(video_id: str, request: Request):
+
     if not verify_signed_url(video_id, request.query_params):
-        raise HTTPException(status_code=403)
+        raise HTTPException(403)
 
     video = get_video(video_id)
     if not video:
-        raise HTTPException(status_code=404)
+        raise HTTPException(404)
 
-    file_path = video["file_path"]
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404)
+    manifest_path = os.path.join(HLS_DIR, video_id, "manifest.json")
+    if not os.path.exists(manifest_path):
+        raise HTTPException(404, "Manifest missing - cannot stat via chunks")
 
-    size = os.path.getsize(file_path)
+    with open(manifest_path, "r") as f:
+        manifest = json.load(f)
+
+    file_size = sum(c["size"] for c in manifest["chunks"])
 
     return StreamingResponse(
         iter([]),
         headers={
-            "Content-Length": str(size),
+            "Content-Length": str(file_size),
             "Accept-Ranges": "bytes",
             "Content-Type": "video/mp4"
         }

@@ -2,6 +2,7 @@ from fastapi import APIRouter, UploadFile, File, HTTPException
 import os
 import json
 import hashlib
+from utils.walrus import store_blob
 
 router = APIRouter()
 STORAGE_DIR = "storage"
@@ -22,7 +23,8 @@ async def upload_chunk(
     session_dir = os.path.join(STORAGE_DIR, session_id)
     os.makedirs(session_dir, exist_ok=True)
 
-    file_path = os.path.join(session_dir, chunk_id)
+    # Local file_path no longer needed for data, but can keep for backwards compatibility 
+    # if we wanted to dual-write. For now we only write to Walrus.
 
     content = await file.read()
 
@@ -38,12 +40,13 @@ async def upload_chunk(
         if c["chunk_id"] == chunk_id:
             raise HTTPException(status_code=400, detail="Chunk already uploaded")
 
-    with open(file_path, "wb") as f:
-        f.write(content)
+    # Store blob in Walrus
+    blob_id = store_blob(content)
 
     manifest["chunks"].append({
         "chunk_id": chunk_id,
         "chunk_index": chunk_index,
+        "blob_id": blob_id,
         "checksum": checksum(content),
         "size": len(content)
     })

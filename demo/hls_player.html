@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>HLS Player</title>
+</head>
+<body>
+
+<h2>HLS Streaming Demo</h2>
+
+<select id="videoSelect">
+  <option>Loading videos...</option>
+</select>
+
+<br><br>
+
+<video id="video" controls width="800"></video>
+
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+
+<script>
+const video = document.getElementById('video');
+const dropdown = document.getElementById('videoSelect');
+
+
+// --------------------------------------
+// 1. LOAD VIDEO LIST
+// --------------------------------------
+async function loadVideos() {
+  try {
+    const res = await fetch("/videos");
+    const data = await res.json();
+
+    const videos = data.videos || data;
+
+    dropdown.innerHTML = "";
+
+    if (!videos.length) {
+      dropdown.innerHTML = "<option>No videos found</option>";
+      return;
+    }
+
+    videos.forEach(v => {
+      const opt = document.createElement("option");
+      opt.value = v.video_id;
+      opt.textContent = v.video_id;
+      dropdown.appendChild(opt);
+    });
+
+    playVideo(videos[0].video_id);
+
+  } catch (e) {
+    dropdown.innerHTML = "<option>Error loading videos</option>";
+    console.error("Error loading videos:", e);
+  }
+}
+
+
+// --------------------------------------
+// 2. GET SIGNED URL + PLAY VIDEO
+// --------------------------------------
+async function playVideo(videoId) {
+  try {
+    console.log("Requesting signed URL for:", videoId);
+
+    const res = await fetch(`/playback-url/${videoId}`);
+    const data = await res.json();
+
+    console.log("Playback response:", data);
+
+    // ⭐ IMPORTANT FIX
+    const videoSrc = data.playlist;
+
+    if (!videoSrc) {
+      alert("No playback URL received");
+      return;
+    }
+
+    // destroy old instance
+    if (window.hls) {
+      window.hls.destroy();
+      window.hls = null;
+    }
+
+    if (Hls.isSupported()) {
+      window.hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: false
+      });
+
+      window.hls.loadSource(videoSrc);
+      window.hls.attachMedia(video);
+
+      window.hls.on(Hls.Events.ERROR, function (event, data) {
+        console.error("HLS Error:", data);
+      });
+
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = videoSrc;
+    }
+
+  } catch (e) {
+    console.error("Playback error:", e);
+    alert("Error playing video");
+  }
+}
+
+
+// --------------------------------------
+dropdown.onchange = () => playVideo(dropdown.value);
+loadVideos();
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: #000000;
+  --color-foreground: #ffffff;
+  --color-subtle: #111111;
+  --color-muted: #666666;
+  --color-accent: #ffffff;
+}
+
+:root {
+  --background: #000000;
+  --foreground: #ffffff;
+  --subtle: #111111;
+  --muted: #666666;
+  --accent: #ffffff;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@layer base {
+  * {
+    @apply border-white/10;
+  }
+}
+
+.glass-card {
+  @apply bg-white/[0.03] backdrop-blur-xl border border-white/10;
+}
+
+.btn-primary {
+  @apply bg-white text-black px-6 py-2 rounded-full font-medium transition-all hover:bg-white/90 active:scale-95 disabled:bg-white/50;
+}
+
+.btn-secondary {
+  @apply border border-white/20 px-6 py-2 rounded-full font-medium transition-all hover:bg-white/5 active:scale-95;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #222;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #333;
+}

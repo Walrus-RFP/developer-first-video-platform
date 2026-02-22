@@ -66,3 +66,6 @@ Run Data Plane
 ```bash
 uvicorn data_plane.stream_server:app --reload --port 8001
 ```
+### FFmpeg (required for HLS)
+macOS: brew install ffmpeg
+Ubuntu: sudo apt install ffmpeg
