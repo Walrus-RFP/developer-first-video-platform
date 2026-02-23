@@ -21,7 +21,7 @@ uvicorn==0.39.0
 
 sqlalchemy
 psycopg2-binary
-pysui==0.59.0
+pysui==0.55.0
 cryptography
 
 # Testing
