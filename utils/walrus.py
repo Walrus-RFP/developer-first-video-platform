@@ -32,7 +32,7 @@ def with_retries(max_retries=3, initial_backoff=1):
     return decorator
 
 @with_retries(max_retries=5, initial_backoff=2)
-def store_blob(data: bytes, epochs: int = 1) -> str:
+def store_blob(data: bytes, epochs: int = 5) -> str:
     """
     Stores a blob in Walrus using HTTP endpoints (standard lib).
     Returns the newly created blob_id as a string.
@@ -49,7 +49,23 @@ def store_blob(data: bytes, epochs: int = 1) -> str:
             if "newlyCreated" in json_data:
                 return json_data["newlyCreated"]["blobObject"]["blobId"]
             elif "alreadyCertified" in json_data:
-                return json_data["alreadyCertified"]["blobId"]
+                blob_id = json_data["alreadyCertified"]["blobId"]
+                
+                # Check if the Aggregator actually has it (bypass stale publisher cache)
+                check_url = f"{AGGREGATOR_URL}/v1/blobs/{blob_id}"
+                check_req = urllib.request.Request(check_url, method="GET")
+                try:
+                    with urllib.request.urlopen(check_req) as check_resp:
+                        check_resp.read(1) # Just check if we can read
+                    return blob_id
+                except urllib.error.HTTPError as he:
+                    if he.code == 404:
+                        logger.warning("Publisher returned alreadyCertified but Aggregator 404'd. Forcing fresh upload.")
+                        # Walrus testnet pruned the blob. Append a single space character at the end 
+                        # of the video chunk to force a new hash. MP4 format ignores trailing whitespace.
+                        new_data = data + b" "
+                        return store_blob(new_data, epochs)
+                    raise he
                 
             raise Exception(f"Unexpected Walrus Publisher response: {json_data}")
     except urllib.error.HTTPError as e:
