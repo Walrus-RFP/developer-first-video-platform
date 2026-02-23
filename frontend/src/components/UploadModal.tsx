@@ -45,25 +45,10 @@ export default function UploadModal({ onClose, onSuccess }: { onClose: () => voi
 
             const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
 
-            // 2. Check which chunks are already uploaded (enables resume)
-            let uploadedSet = new Set<number>();
-            try {
-                const statusResp = await fetch(`${DATA_PLANE}/upload-session/${sessionId}`);
-                if (statusResp.ok) {
-                    const statusData = await statusResp.json();
-                    uploadedSet = new Set(statusData.uploaded_chunks || []);
-                    if (uploadedSet.size > 0) {
-                        console.log(`Resuming: ${uploadedSet.size}/${totalChunks} chunks already uploaded`);
-                    }
-                }
-            } catch { /* first upload — no chunks yet */ }
-
-            // 3. Upload remaining chunks
+            // We are forcing a fresh upload every time to bypass any corrupt cached blobs
+            // on the backend from previous failed attempts.
             for (let i = 0; i < totalChunks; i++) {
-                if (uploadedSet.has(i)) {
-                    setProgress(Math.round(((i + 1) / totalChunks) * 100));
-                    continue; // Skip already-uploaded chunk
-                }
+
 
                 const start = i * CHUNK_SIZE;
                 const end = Math.min(file.size, start + CHUNK_SIZE);
