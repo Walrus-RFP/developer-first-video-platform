@@ -72,11 +72,19 @@ export default function UploadModal({ onClose, onSuccess }: { onClose: () => voi
                 const formData = new FormData();
                 formData.append("file", chunk);
 
-                await fetch(`${DATA_PLANE}/upload-chunk/${sessionId}/chunk_${i}/${i}`, {
+                const chunkResp = await fetch(`${DATA_PLANE}/upload-chunk/${sessionId}/chunk_${i}/${i}`, {
                     method: "POST",
                     body: formData
                 });
+
+                if (!chunkResp.ok) {
+                    const errText = await chunkResp.text();
+                    console.error(`Chunk ${i} upload failed:`, errText);
+                    throw new Error(`Chunk ${i} upload failed: ${errText}`);
+                }
+
                 setProgress(Math.round(((i + 1) / totalChunks) * 100));
+
             }
 
             // 3. Kick off async completion
