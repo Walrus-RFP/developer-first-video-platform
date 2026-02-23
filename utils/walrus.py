@@ -11,7 +11,7 @@ import urllib.error
 PUBLISHER_URL = os.environ.get("PUBLISHER_URL", "https://publisher.walrus-testnet.walrus.space")
 AGGREGATOR_URL = os.environ.get("AGGREGATOR_URL", "https://aggregator.walrus-testnet.walrus.space")
 
-def with_retries(max_retries=3, initial_backoff=1):
+def with_retries(max_retries=3, initial_backoff=1, max_backoff=30):
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
@@ -27,7 +27,7 @@ def with_retries(max_retries=3, initial_backoff=1):
                         raise
                     logger.warning("Attempt %d failed: %s. Retrying in %ds...", retries, e, backoff)
                     time.sleep(backoff)
-                    backoff *= 2
+                    backoff = min(backoff * 2, max_backoff)
         return wrapper
     return decorator
 
@@ -72,7 +72,7 @@ def store_blob(data: bytes, epochs: int = 5) -> str:
         err_body = e.read().decode('utf-8')
         raise Exception(f"HTTPError {e.code}: {err_body}")
 
-@with_retries(max_retries=6, initial_backoff=2)
+@with_retries(max_retries=30, initial_backoff=2, max_backoff=10)
 def read_blob(blob_id: str) -> bytes:
     """
     Retrieves a blob's raw bytes from Walrus using HTTP endpoints.
