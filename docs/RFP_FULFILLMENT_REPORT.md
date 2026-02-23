@@ -23,8 +23,8 @@ This document serves as the final audit checklist to verify that all requirement
 | :--- | :--- | :--- |
 | **Clean APIs** | Stateless REST endpoints for sessions, uploads, and playback. | `control_plane/main.py` |
 | **Developer SDK** | "1-Line" Python SDK for easy backend-to-backend integration. | `utils/sdk.py` |
-| **Access Control & Privacy** | Sui Move registry with `check_permission` logic. | `smart_contracts/` & `utils/sui.py` |
-| **Observability & Metrics** | Real-time `/metrics` endpoint with video & owner stats. | `control_plane/main.py` |
+| **Access Control & Privacy** | AES-GCM Seal-based encryption for private blobs + Sui Move gating. | `utils/crypto.py` |
+| **Observability & Analytics** | Database-backed ingress/egress logs with bandwidth tracking. | `control_plane/db.py` |
 
 ---
 

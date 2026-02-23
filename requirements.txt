@@ -18,3 +18,12 @@ typing-inspection==0.4.2
 typing_extensions==4.15.0
 urllib3==2.1.0
 uvicorn==0.39.0
+
+sqlalchemy
+psycopg2-binary
+pysui==0.59.0
+cryptography
+
+# Testing
+pytest
+httpx

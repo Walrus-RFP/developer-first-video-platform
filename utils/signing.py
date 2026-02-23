@@ -3,9 +3,14 @@ import hmac
 import time
 import urllib.parse
 import os
+from utils.logger import logger
 
-SECRET = "super_secret_key_change_me"
+_DEFAULT_SECRET = "super_secret_key_change_me"
+SECRET = os.environ.get("SIGNING_SECRET", _DEFAULT_SECRET)
+if SECRET == _DEFAULT_SECRET:
+    logger.warning("Using default signing secret. Set SIGNING_SECRET env var in production!")
 DATA_PLANE_URL = os.environ.get("DATA_PLANE_URL", "http://127.0.0.1:8001")
+PUBLIC_DATA_PLANE_URL = os.environ.get("PUBLIC_DATA_PLANE_URL", "http://localhost:8001")
 
 
 # =====================================================
@@ -19,7 +24,7 @@ def create_signed_url(video_id: str, file: str = "playlist.m3u8", expiry_seconds
     sig = hmac.new(SECRET.encode(), message, hashlib.sha256).hexdigest()
 
     return (
-        f"{DATA_PLANE_URL}/play/{video_id}/{file}"
+        f"{PUBLIC_DATA_PLANE_URL}/play/{video_id}/{file}"
         f"?exp={exp}&sig={sig}"
     )
 

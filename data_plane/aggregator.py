@@ -2,14 +2,16 @@ import os
 import json
 import concurrent.futures
 from data_plane.cache import chunk_cache
+from utils.logger import logger
 
 STORAGE_DIR = "storage"
 
-def stream_byte_range(video_id: str, start: int, end: int):
+def stream_byte_range(video_id: str, start: int, end: int, encryption_key: str = None):
     """
     Generator that parses the manifest and yields the requested byte range
     by fetching specific chunks from the cache (and therefore Walrus).
     Implements parallel pre-fetching for multi-chunk requests.
+    Supports on-the-fly decryption if encryption_key is provided.
     """
     # In a production stateless setup, we look in the HLS dir for the manifest
     # (which we enriched with hls_assets earlier)
@@ -47,7 +49,12 @@ def stream_byte_range(video_id: str, start: int, end: int):
 
     # 2. Pre-fetch all needed chunks in parallel
     # We use a ThreadPoolExecutor to trigger the cache/Walrus fetches
-    print(f"[AGGREGATOR] Parallel fetching {len(needed_blobs)} chunks for range {start}-{end}...")
+    logger.info("Parallel fetching chunks for range", extra={
+        "video_id": video_id,
+        "chunk_count": len(needed_blobs),
+        "range_start": start,
+        "range_end": end
+    })
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
         # Submit all fetches and map blob_id -> future
@@ -62,6 +69,16 @@ def stream_byte_range(video_id: str, start: int, end: int):
             future = blob_to_future[b_id]
             chunk_data = future.result()
             
+            # Decrypt if needed
+            if encryption_key:
+                from utils.crypto import decrypt_data
+                try:
+                    chunk_data = decrypt_data(chunk_data, encryption_key)
+                except Exception as e:
+                    logger.error("Failed to decrypt chunk in range stream", extra={"video_id": video_id, "error": str(e)})
+                    # Yielding zero bytes on failure to avoid leaking encrypted data or crashing hard mid-stream
+                    return
+
             # Slice the chunk if we only need part of it
             internal_start = max(0, start - c_start)
             amount_needed = min(remaining_bytes, len(chunk_data) - internal_start)

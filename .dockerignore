@@ -1,0 +1,11 @@
+**/node_modules/
+venv/
+storage/
+frontend/
+sui-auth-proxy/
+venv_clean/
+*.db
+.next/
+.git/
+__pycache__/
+*.pyc

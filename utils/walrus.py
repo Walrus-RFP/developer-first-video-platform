@@ -3,6 +3,7 @@ import tempfile
 import json
 import uuid
 import time
+from utils.logger import logger
 import functools
 import urllib.request
 import urllib.error
@@ -22,9 +23,9 @@ def with_retries(max_retries=3, initial_backoff=1):
                 except Exception as e:
                     retries += 1
                     if retries >= max_retries:
-                        print(f"[RETRY ERROR] Final failure after {max_retries} attempts: {e}")
+                        logger.error("Final failure after %d attempts: %s", max_retries, e)
                         raise
-                    print(f"[RETRY WARNING] Attempt {retries} failed: {e}. Retrying in {backoff}s...")
+                    logger.warning("Attempt %d failed: %s. Retrying in %ds...", retries, e, backoff)
                     time.sleep(backoff)
                     backoff *= 2
         return wrapper
@@ -55,7 +56,7 @@ def store_blob(data: bytes, epochs: int = 1) -> str:
         err_body = e.read().decode('utf-8')
         raise Exception(f"HTTPError {e.code}: {err_body}")
 
-@with_retries(max_retries=3, initial_backoff=1)
+@with_retries(max_retries=6, initial_backoff=2)
 def read_blob(blob_id: str) -> bytes:
     """
     Retrieves a blob's raw bytes from Walrus using HTTP endpoints.

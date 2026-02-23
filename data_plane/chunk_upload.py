@@ -11,7 +11,7 @@ os.makedirs(STORAGE_DIR, exist_ok=True)
 def checksum(data):
     return hashlib.sha256(data).hexdigest()
 
-#UNDERSTOOD TILL HERE
+
 
 @router.post("/upload-chunk/{session_id}/{chunk_id}/{chunk_index}")
 async def upload_chunk(
@@ -69,3 +69,29 @@ def get_manifest(session_id: str):
 
     with open(manifest_path, "r") as f:
         return json.load(f)
+
+
+@router.get("/upload-session/{session_id}")
+def get_upload_session(session_id: str):
+    """Returns which chunks have been uploaded, enabling resumable uploads."""
+    session_dir = os.path.join(STORAGE_DIR, session_id)
+    manifest_path = os.path.join(session_dir, "manifest.json")
+
+    if not os.path.exists(manifest_path):
+        return {
+            "session_id": session_id,
+            "status": "created",
+            "uploaded_chunks": [],
+            "total_uploaded": 0,
+        }
+
+    with open(manifest_path, "r") as f:
+        manifest = json.load(f)
+
+    chunks = manifest.get("chunks", [])
+    return {
+        "session_id": session_id,
+        "status": "uploading",
+        "uploaded_chunks": sorted([c["chunk_index"] for c in chunks]),
+        "total_uploaded": len(chunks),
+    }

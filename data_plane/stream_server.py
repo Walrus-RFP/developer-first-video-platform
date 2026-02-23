@@ -1,11 +1,15 @@
+from dotenv import load_dotenv
+load_dotenv()  # Load .env before any module reads os.environ
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
 from data_plane.chunk_upload import router as chunk_router
-from control_plane.db import get_video
+from control_plane.db import get_video, log_usage
 from utils.signing import verify_signed_url
 from data_plane.cache import chunk_cache
 from data_plane.aggregator import stream_byte_range
+from utils.logger import logger
 
 import os
 import json
@@ -16,6 +20,9 @@ CONTROL_PLANE_URL = os.environ.get("CONTROL_PLANE_URL", "http://127.0.0.1:8000")
 
 app = FastAPI()
 
+from control_plane.rate_limit import RateLimitMiddleware
+
+app.add_middleware(RateLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -23,7 +30,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(chunk_router)
+app.include_router(chunk_router, prefix="/v1")
 
 STORAGE_DIR = "storage"
 HLS_DIR = os.path.join(STORAGE_DIR, "hls")
@@ -97,14 +104,22 @@ def play_video(video_id: str, request: Request):
             "Content-Type": "video/mp4",
         }
 
+        # Log egress usage
+        log_usage(video_id, video.get("owner", "unknown"), "egress", end - start + 1)
+
         return StreamingResponse(
-            stream_byte_range(video_id, start, end),
+            stream_byte_range(video_id, start, end, encryption_key=video.get("encryption_key")),
             status_code=206,
             headers=headers,
         )
 
+    # Log egress usage
+    log_usage(video_id, video.get("owner", "unknown"), "egress", file_size)
+
+    # Note: Full MP4 decryption is expensive for large files.
+    # In production, we primarily force HLS for encrypted content.
     return StreamingResponse(
-        stream_byte_range(video_id, 0, file_size - 1),
+        stream_byte_range(video_id, 0, file_size - 1, encryption_key=video.get("encryption_key")),
         headers={"Content-Type": "video/mp4"},
     )
 
@@ -138,13 +153,13 @@ def serve_hls_file(video_id: str, file_path: str, request: Request):
             hls_assets = manifest.get("hls_assets", {})
             blob_id = hls_assets.get(requested_path)
         except json.JSONDecodeError:
-            print(f"[ERROR] Corrupted or empty manifest at {manifest_path}")
+            logger.error("Corrupted or empty manifest", extra={"video_id": video_id, "path": manifest_path})
             blob_id = None
     else:
         # Fetch manifest from control plane over HTTP (production: separate servers)
         try:
-            manifest_url = f"{CONTROL_PLANE_URL}/hls-manifest/{video_id}"
-            print(f"[REMOTE] Fetching HLS manifest from {manifest_url}")
+            manifest_url = f"{CONTROL_PLANE_URL}/v1/hls-manifest/{video_id}"
+            logger.info("Fetching HLS manifest from control plane", extra={"video_id": video_id, "url": manifest_url})
             req = urllib.request.Request(manifest_url, method="GET")
             req.add_header("User-Agent", "WalrusDataPlane/1.0")
             with urllib.request.urlopen(req) as response:
@@ -157,15 +172,30 @@ def serve_hls_file(video_id: str, file_path: str, request: Request):
             
             hls_assets = manifest.get("hls_assets", {})
             blob_id = hls_assets.get(requested_path)
-            print(f"[REMOTE] Cached manifest with {len(hls_assets)} assets")
+            logger.info("Cached manifest locally", extra={"video_id": video_id, "asset_count": len(hls_assets)})
         except Exception as e:
-            print(f"[ERROR] Failed to fetch HLS manifest from control plane: {e}")
+            logger.error("Failed to fetch HLS manifest", extra={"video_id": video_id, "error": str(e)})
             blob_id = None
 
     if blob_id:
-        print(f"[STATELESS] Serving {requested_path} from Walrus blob {blob_id}")
+        logger.info("Serving HLS asset", extra={"video_id": video_id, "path": requested_path, "blob_id": blob_id})
         data = chunk_cache.get_chunk(blob_id)
         
+        # Seal-based Decryption
+        video = get_video(video_id)
+        if video and video.get("encryption_key"):
+            from utils.crypto import decrypt_data
+            try:
+                data = decrypt_data(data, video["encryption_key"])
+                logger.debug("Decrypted blob data for playback", extra={"video_id": video_id, "path": requested_path})
+            except Exception as de:
+                logger.error("Failed to decrypt blob", extra={"error": str(de), "video_id": video_id})
+                raise HTTPException(500, "Content decryption failed")
+
+        # Log egress usage
+        owner = video.get("owner", "unknown") if video else "unknown"
+        log_usage(video_id, owner, "egress", len(data))
+
         if requested_path.endswith(".m3u8"):
             content = data.decode()
             qs = str(request.query_params)
@@ -173,10 +203,18 @@ def serve_hls_file(video_id: str, file_path: str, request: Request):
                 import re
                 content = re.sub(r'([a-zA-Z0-9_\-\./]+\.ts)', rf'\1?{qs}', content)
                 content = re.sub(r'([a-zA-Z0-9_\-\./]+\.m3u8)', rf'\1?{qs}', content)
-            return Response(content=content, media_type="application/vnd.apple.mpegurl")
+            return Response(
+                content=content, 
+                media_type="application/vnd.apple.mpegurl",
+                headers={"Cache-Control": "public, max-age=60"}
+            )
 
         if requested_path.endswith(".ts"):
-            return Response(content=data, media_type="video/MP2T")
+            return Response(
+                content=data, 
+                media_type="video/MP2T",
+                headers={"Cache-Control": "public, max-age=31536000, immutable"}
+            )
             
         return Response(content=data)
 
@@ -185,6 +223,14 @@ def serve_hls_file(video_id: str, file_path: str, request: Request):
 
     if not os.path.exists(path):
         raise HTTPException(404, f"HLS file not found: {requested_path}")
+
+    # Log egress usage
+    video = get_video(video_id)
+    owner = video.get("owner", "unknown") if video else "unknown"
+    try:
+        log_usage(video_id, owner, "egress", os.path.getsize(path))
+    except:
+        pass
 
     # playlist vs segment
     if requested_path.endswith(".m3u8"):
@@ -196,10 +242,18 @@ def serve_hls_file(video_id: str, file_path: str, request: Request):
             content = re.sub(r'([a-zA-Z0-9_\-\./]+\.ts)', rf'\1?{qs}', content)
             content = re.sub(r'([a-zA-Z0-9_\-\./]+\.m3u8)', rf'\1?{qs}', content)
             
-        return Response(content=content, media_type="application/vnd.apple.mpegurl")
+        return Response(
+            content=content, 
+            media_type="application/vnd.apple.mpegurl",
+            headers={"Cache-Control": "public, max-age=60"}
+        )
 
     if requested_path.endswith(".ts"):
-        return FileResponse(path, media_type="video/MP2T")
+        return FileResponse(
+            path, 
+            media_type="video/MP2T",
+            headers={"Cache-Control": "public, max-age=31536000, immutable"}
+        )
 
     return FileResponse(path)
 

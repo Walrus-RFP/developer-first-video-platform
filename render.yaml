@@ -26,3 +26,15 @@ services:
         value: https://publisher.walrus-testnet.walrus.space
       - key: CONTROL_PLANE_URL
         value: https://walrus-control-plane.onrender.com
+
+  # Frontend (Next.js)
+  - type: web
+    name: walrus-frontend
+    runtime: node
+    buildCommand: cd frontend && npm install && npm run build
+    startCommand: cd frontend && npm run start
+    envVars:
+      - key: NEXT_PUBLIC_CONTROL_PLANE
+        value: https://walrus-control-plane.onrender.com
+      - key: NEXT_PUBLIC_DATA_PLANE
+        value: https://walrus-data-plane.onrender.com

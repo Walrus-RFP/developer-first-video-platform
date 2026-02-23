@@ -6,18 +6,21 @@ import { useState, useEffect } from "react";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 import UploadModal from "@/components/UploadModal";
 import VideoPlayer from "@/components/VideoPlayer";
+import ApiKeysView from "@/components/ApiKeysView";
+import DashboardStats from "@/components/DashboardStats";
 
-const API_BASE = process.env.NEXT_PUBLIC_CONTROL_PLANE_URL || "http://127.0.0.1:8000";
+const API_BASE = (process.env.NEXT_PUBLIC_CONTROL_PLANE_URL || "http://127.0.0.1:8000") + "/v1";
 
 export default function Home() {
     const [videos, setVideos] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [viewType, setViewType] = useState<"all" | "mine">("all");
+    const [viewType, setViewType] = useState<"all" | "mine" | "api_keys">("all");
     const [showUpload, setShowUpload] = useState(false);
     const [activePlayback, setActivePlayback] = useState<{ id: string, url: string } | null>(null);
     const account = useCurrentAccount();
 
     const fetchVideos = async (type = viewType) => {
+        console.log(`[Frontend] Fetching videos for ${type}...`);
         try {
             setLoading(true);
             const url = type === 'mine' && account
@@ -36,7 +39,7 @@ export default function Home() {
 
     useEffect(() => {
         fetchVideos(viewType);
-    }, [viewType, account]);
+    }, [viewType, account?.address]);
 
     const handlePlay = async (videoId: string) => {
         try {
@@ -82,6 +85,9 @@ export default function Home() {
                 </div>
             </section>
 
+            {/* Platform Stats */}
+            <DashboardStats />
+
             {/* Video Grid */}
             <section className="space-y-8">
                 <div className="flex flex-col md:flex-row items-start md:items-end justify-between border-b border-white/5 pb-4 gap-4">
@@ -98,11 +104,23 @@ export default function Home() {
                         >
                             My Library
                         </button>
+                        {account && (
+                            <button
+                                onClick={() => setViewType("api_keys")}
+                                className={`text-sm font-semibold tracking-widest uppercase transition-colors ${viewType === 'api_keys' ? 'text-white' : 'text-muted hover:text-white/70'}`}
+                            >
+                                API Keys
+                            </button>
+                        )}
                     </div>
-                    <span className="text-xs text-muted tracking-tight">{videos.length} videos available</span>
+                    {viewType !== 'api_keys' && (
+                        <span className="text-xs text-muted tracking-tight">{videos.length} videos available</span>
+                    )}
                 </div>
 
-                {viewType === 'mine' && !account ? (
+                {viewType === 'api_keys' && account ? (
+                    <ApiKeysView address={account.address} />
+                ) : viewType === 'mine' && !account ? (
                     <div className="py-20 text-center border border-dashed border-white/10 rounded-2xl glass-card">
                         <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
                             <Info className="text-muted" size={24} />
@@ -155,7 +173,22 @@ export default function Home() {
     );
 }
 
+function formatDuration(seconds: number | null): string {
+    if (!seconds) return "";
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+function formatSize(bytes: number | null): string {
+    if (!bytes) return "";
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function VideoCard({ video, index, onClick }: { video: any, index: number, onClick: () => void }) {
+    const displayTitle = video.title || `Video ${video.video_id.slice(0, 8)}`;
+
     return (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -164,23 +197,46 @@ function VideoCard({ video, index, onClick }: { video: any, index: number, onCli
             onClick={onClick}
             className="group cursor-pointer space-y-4"
         >
-            <div className="relative aspect-video glass-card rounded-2xl overflow-hidden group-hover:border-white/20 transition-all duration-500">
-                <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div className="relative aspect-video glass-card rounded-2xl overflow-hidden group-hover:border-white/20 transition-all duration-500 bg-white/5">
+                <img
+                    src={`${process.env.NEXT_PUBLIC_CONTROL_PLANE_URL}/thumbnail/${video.video_id}`}
+                    alt={displayTitle}
+                    className="absolute inset-0 w-full h-full object-cover"
+                    onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                    }}
+                />
+                <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-colors" />
                 <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-500 scale-90 group-hover:scale-100">
                     <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center text-black">
                         <Play fill="currentColor" size={24} className="ml-1" />
                     </div>
                 </div>
-                <div className="absolute bottom-4 right-4 text-[10px] tracking-widest font-bold uppercase py-1 px-2 border border-white/20 rounded bg-black/40 backdrop-blur-md">
-                    {video.status}
+                {video.duration_seconds && (
+                    <div className="absolute bottom-4 left-4 text-[10px] tracking-widest font-bold uppercase py-1 px-2 border border-white/20 rounded bg-black/40 backdrop-blur-md">
+                        {formatDuration(video.duration_seconds)}
+                    </div>
+                )}
+                <div className="absolute bottom-4 right-4 flex gap-2">
+                    {video.resolution && (
+                        <span className="text-[10px] tracking-widest font-bold uppercase py-1 px-2 border border-white/20 rounded bg-black/40 backdrop-blur-md">
+                            {video.resolution}
+                        </span>
+                    )}
+                    <span className="text-[10px] tracking-widest font-bold uppercase py-1 px-2 border border-white/20 rounded bg-black/40 backdrop-blur-md">
+                        {video.status}
+                    </span>
                 </div>
             </div>
             <div className="space-y-1">
                 <div className="flex justify-between items-start">
-                    <h3 className="font-medium tracking-tight truncate flex-1">{video.video_id}</h3>
+                    <h3 className="font-medium tracking-tight truncate flex-1">{displayTitle}</h3>
                     <ArrowUpRight size={14} className="opacity-0 group-hover:opacity-40 transition-opacity" />
                 </div>
-                <p className="text-xs text-muted truncate">{video.file_path}</p>
+                <p className="text-xs text-muted truncate">
+                    {video.owner !== "test_user" ? video.owner.slice(0, 10) + "…" : "Anonymous"}
+                    {video.file_size ? ` · ${formatSize(video.file_size)}` : ""}
+                </p>
             </div>
         </motion.div>
     );

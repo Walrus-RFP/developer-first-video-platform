@@ -6,14 +6,18 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
 import { Transaction } from "@mysten/sui/transactions";
 
-const CONTROL_PLANE = process.env.NEXT_PUBLIC_CONTROL_PLANE_URL || "http://127.0.0.1:8000";
-const DATA_PLANE = process.env.NEXT_PUBLIC_DATA_PLANE_URL || "http://127.0.0.1:8001";
+const CONTROL_PLANE = (process.env.NEXT_PUBLIC_CONTROL_PLANE_URL || "http://127.0.0.1:8000") + "/v1";
+const DATA_PLANE = (process.env.NEXT_PUBLIC_DATA_PLANE_URL || "http://127.0.0.1:8001") + "/v1";
 const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
 
 export default function UploadModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: () => void }) {
     const [file, setFile] = useState<File | null>(null);
+    const [title, setTitle] = useState("");
+    const [apiKey, setApiKey] = useState("");
+    const [isPublic, setIsPublic] = useState(true);
     const [status, setStatus] = useState<"idle" | "uploading" | "processing" | "success" | "error">("idle");
     const [progress, setProgress] = useState(0);
+    const [statusMsg, setStatusMsg] = useState("");
     const [error, setError] = useState("");
     const account = useCurrentAccount();
     const { mutateAsync: signAndExecuteTransaction } = useSignAndExecuteTransaction();
@@ -25,15 +29,42 @@ export default function UploadModal({ onClose, onSuccess }: { onClose: () => voi
         setProgress(0);
 
         try {
-            // 1. Create session
-            const sessResp = await fetch(`${CONTROL_PLANE}/upload-session`, { method: "POST" });
+            // 1. Create session (requires API Key)
+            const sessResp = await fetch(`${CONTROL_PLANE}/upload-session`, {
+                method: "POST",
+                headers: { "X-API-Key": apiKey }
+            });
+
+            if (!sessResp.ok) {
+                if (sessResp.status === 401 || sessResp.status === 403) throw new Error("Invalid API Key");
+                throw new Error("Failed to create upload session");
+            }
+
             const sessData = await sessResp.json();
             const sessionId = sessData.upload_session_id;
 
             const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
 
-            // 2. Upload chunks sequentially (to match our verified aggregator logic)
+            // 2. Check which chunks are already uploaded (enables resume)
+            let uploadedSet = new Set<number>();
+            try {
+                const statusResp = await fetch(`${DATA_PLANE}/upload-session/${sessionId}`);
+                if (statusResp.ok) {
+                    const statusData = await statusResp.json();
+                    uploadedSet = new Set(statusData.uploaded_chunks || []);
+                    if (uploadedSet.size > 0) {
+                        console.log(`Resuming: ${uploadedSet.size}/${totalChunks} chunks already uploaded`);
+                    }
+                }
+            } catch { /* first upload — no chunks yet */ }
+
+            // 3. Upload remaining chunks
             for (let i = 0; i < totalChunks; i++) {
+                if (uploadedSet.has(i)) {
+                    setProgress(Math.round(((i + 1) / totalChunks) * 100));
+                    continue; // Skip already-uploaded chunk
+                }
+
                 const start = i * CHUNK_SIZE;
                 const end = Math.min(file.size, start + CHUNK_SIZE);
                 const chunk = file.slice(start, end);
@@ -48,19 +79,47 @@ export default function UploadModal({ onClose, onSuccess }: { onClose: () => voi
                 setProgress(Math.round(((i + 1) / totalChunks) * 100));
             }
 
-            // 3. Complete upload
+            // 3. Kick off async completion
             setStatus("processing");
-            const ownerParam = account ? `?owner=${account.address}` : "";
-            const completeResp = await fetch(`${CONTROL_PLANE}/complete-upload/${sessionId}${ownerParam}`, { method: "POST" });
+            setStatusMsg("Starting processing job...");
+            const params = new URLSearchParams();
+            if (account) params.set("owner", account.address);
+            if (title.trim()) params.set("title", title.trim());
+            params.set("is_public", isPublic ? "true" : "false");
+
+            const qs = params.toString() ? `?${params.toString()}` : "";
+            const completeResp = await fetch(`${CONTROL_PLANE}/complete-upload/${sessionId}${qs}`, {
+                method: "POST",
+                headers: { "X-API-Key": apiKey }
+            });
 
             if (!completeResp.ok) {
                 const errorData = await completeResp.json().catch(() => ({ detail: "Upload completion failed" }));
                 throw new Error(errorData.detail || "Upload completion failed");
             }
 
-            const completeData = await completeResp.json();
+            // 4. Poll for status
+            let completeData = null;
+            while (true) {
+                await new Promise(resolve => setTimeout(resolve, 3000));
 
-            // 4. Sign and execute on-chain transaction
+                const statusResp = await fetch(`${CONTROL_PLANE}/upload-status/${sessionId}`);
+                if (!statusResp.ok) continue;
+
+                const statusData = await statusResp.json();
+
+                if (statusData.status === "failed") {
+                    throw new Error(statusData.error || "Async upload processing failed on backend.");
+                } else if (statusData.status === "upload completed") {
+                    completeData = statusData;
+                    break;
+                } else {
+                    setStatusMsg(statusData.status);
+                }
+            }
+
+            // 5. Sign and execute on-chain transaction
+            setStatusMsg("Requesting Wallet Signature...");
             if (account && completeData.sui_package_id && completeData.sui_registry_id) {
                 const tx = new Transaction();
                 tx.moveCall({
@@ -134,22 +193,55 @@ export default function UploadModal({ onClose, onSuccess }: { onClose: () => voi
                     </div>
 
                     {status === "idle" && (
-                        <div
-                            className="border-2 border-dashed border-white/10 rounded-2xl p-12 text-center space-y-4 hover:border-white/20 transition-colors cursor-pointer group"
-                            onClick={() => document.getElementById("fileInput")?.click()}
-                        >
-                            <input
-                                id="fileInput"
-                                type="file"
-                                className="hidden"
-                                onChange={(e) => setFile(e.target.files?.[0] || null)}
-                            />
-                            <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto group-hover:scale-110 transition-transform">
-                                <Upload size={28} className="text-muted group-hover:text-white transition-colors" />
+                        <div className="space-y-4">
+                            <div className="flex gap-4">
+                                <input
+                                    type="text"
+                                    placeholder="API Key (required)"
+                                    value={apiKey}
+                                    onChange={(e) => setApiKey(e.target.value)}
+                                    className="w-1/2 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm placeholder:text-muted focus:outline-none focus:border-white/30 transition-colors"
+                                />
+                                <input
+                                    type="text"
+                                    placeholder="Video title (optional)"
+                                    value={title}
+                                    onChange={(e) => setTitle(e.target.value)}
+                                    className="w-1/2 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm placeholder:text-muted focus:outline-none focus:border-white/30 transition-colors"
+                                />
                             </div>
-                            <div className="space-y-1">
-                                <p className="font-medium">{file ? file.name : "Choose File"}</p>
-                                <p className="text-xs text-muted">MP4, MOV up to 2GB</p>
+                            <div
+                                className="border-2 border-dashed border-white/10 rounded-2xl p-12 text-center space-y-4 hover:border-white/20 transition-colors cursor-pointer group"
+                                onClick={() => document.getElementById("fileInput")?.click()}
+                            >
+                                <input
+                                    id="fileInput"
+                                    type="file"
+                                    className="hidden"
+                                    onChange={(e) => setFile(e.target.files?.[0] || null)}
+                                />
+                                <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto group-hover:scale-110 transition-transform">
+                                    <Upload size={28} className="text-muted group-hover:text-white transition-colors" />
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="font-medium">{file ? file.name : "Choose File"}</p>
+                                    <p className="text-xs text-muted">MP4, MOV up to 2GB</p>
+                                </div>
+                            </div>
+
+                            <div className="flex bg-white/5 border border-white/10 rounded-xl p-1 overflow-hidden">
+                                <button
+                                    onClick={() => setIsPublic(true)}
+                                    className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${isPublic ? "bg-white text-black" : "text-muted hover:text-white"}`}
+                                >
+                                    Public (Free)
+                                </button>
+                                <button
+                                    onClick={() => setIsPublic(false)}
+                                    className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${!isPublic ? "bg-white text-black" : "text-muted hover:text-white"}`}
+                                >
+                                    Private (SEAL)
+                                </button>
                             </div>
                         </div>
                     )}
@@ -159,7 +251,7 @@ export default function UploadModal({ onClose, onSuccess }: { onClose: () => voi
                             <div className="flex justify-between text-sm font-medium">
                                 <span className="flex items-center gap-2">
                                     <Loader2 className="animate-spin" size={16} />
-                                    {status === "uploading" ? `CARRYING BLOCKS... ${progress}%` : "RECONSTITUTING AT WALRUS..."}
+                                    {status === "uploading" ? `CARRYING BLOCKS... ${progress}%` : (statusMsg || "RECONSTITUTING AT WALRUS...")}
                                 </span>
                                 <span className="text-muted">{file?.name}</span>
                             </div>
@@ -193,16 +285,16 @@ export default function UploadModal({ onClose, onSuccess }: { onClose: () => voi
 
                     <div className="flex gap-4">
                         <button
-                            disabled={!file || status !== "idle"}
+                            disabled={!file || !apiKey || status !== "idle"}
                             onClick={handleUpload}
-                            className="btn-primary flex-1 disabled:opacity-20"
+                            className="btn-primary flex-1 disabled:opacity-20 flex justify-center items-center gap-2 transition-all hover:scale-105"
                         >
                             Confirm Upload
                         </button>
                         <button onClick={onClose} className="btn-secondary">Cancel</button>
                     </div>
                 </div>
-            </motion.div>
-        </div>
+            </motion.div >
+        </div >
     );
 }

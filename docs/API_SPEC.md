@@ -1,207 +1,146 @@
 # API Specification
 Developer-First Video Infrastructure Platform
 
-This document defines the public APIs provided by the platform.
+This document defines the public REST APIs provided by the platform. The system separates control-plane APIs (metadata, auth, orchestration) from data-plane APIs (heavy streaming and storage).
 
-These APIs are designed for developers to upload, manage, and serve video assets.
+All endpoints are prefixed with `/v1`.
 
-The system separates control-plane APIs from data-plane APIs.
-
----
-
-# 1. Control Plane APIs
-
-Control plane handles metadata, upload sessions, and access policies.
-
-Base URL example:
-http://api.example.com
+### Authentication
+All modifying endpoints on the Control Plane require an `X-API-Key` header with a valid Developer API Key.
 
 ---
 
-## 1.1 Create Upload Session
+# 1. Control Plane APIs (Port 8000)
 
-POST /upload-session
+## 1.1 API Keys & Auth
 
-Creates a new upload session for a video.
-
-Request:
-None
-
-Response:
+### Generate API Key
+`POST /v1/api-keys`
+Requires valid owner authentication (currently bootstrapped to "self").
+**Request Body:**
+```json
 {
-  "upload_session_id": "uuid"
+  "owner": "string",
+  "name": "string"
 }
+```
 
-Description:
-Client must create an upload session before uploading chunks.
+### List API Keys
+`GET /v1/api-keys/{owner}`
+Returns all API keys for the specified owner.
 
 ---
 
-## 1.2 Get Upload Session
+## 1.2 Video Upload Orchestration
 
-GET /upload-session/{session_id}
-
-Returns upload session status.
-
-Response:
+### Create Upload Session
+`POST /v1/upload-session`
+Initializes a new multipart upload session.
+**Headers:** `X-API-Key: <your_key>`
+**Response:**
+```json
 {
   "upload_session_id": "uuid",
-  "status": "created | uploading | completed"
+  "upload_path": "string"
 }
+```
 
----
-
-## 1.3 Complete Upload
-
-POST /complete-upload/{session_id}
-
-Marks upload as complete.
-
-Response:
+### Complete Upload
+`POST /v1/complete-upload/{session_id}`
+Triggers chunk merging, HLS conversion, Walrus upload, and on-chain setup.
+**Headers:** `X-API-Key: <your_key>`
+**Query Params:**
+- `title` (optional string)
+- `is_public` (optional boolean, default true)
+**Response:**
+```json
 {
-  "status": "upload completed"
+  "status": "upload completed",
+  "video_id": "uuid",
+  "sui_package_id": "0x...",
+  "sui_registry_id": "0x..."
 }
-
-Future behavior:
-- Trigger manifest validation
-- Register video asset metadata
+```
 
 ---
 
-## 1.4 Get Playback URL (Future)
+## 1.3 Video Management & Playback
 
-GET /playback-url/{video_id}
+### Get Video Metadata
+`GET /v1/videos/{video_id}`
+Returns video metadata (title, duration, resolution, size, status).
 
-Returns playback URL for video.
-
-Response:
+### Update Video Metadata
+`PATCH /v1/videos/{video_id}`
+**Headers:** `X-API-Key: <your_key>`
+**Request Body:**
+```json
 {
-  "playback_url": "https://cdn.example.com/video/..."
+  "title": "string (optional)",
+  "description": "string (optional)",
+  "is_public": "boolean (optional)"
 }
+```
+
+### Get Playback URL
+`GET /v1/playback-url/{video_id}?user_address=0x...`
+Returns a signed streaming URL. 
+*Note: If `is_public` is false, `user_address` is strictly required and validated against the Sui blockchain (`sui_devInspectTransactionBlock`) before returning the URL.*
 
 ---
 
-## 1.5 Manage Video Metadata (Future)
+## 1.4 Webhooks (Events)
 
-POST /videos
-GET /videos/{video_id}
-PATCH /videos/{video_id}
-
-Used for:
-- Title
-- Description
-- Versioning
-- Access policies
-
----
-
-# 2. Data Plane APIs
-
-Data plane handles actual video bytes.
-
-Base URL example:
-http://data.example.com
-
----
-
-## 2.1 Upload Chunk
-
-POST /upload-chunk/{session_id}/{chunk_id}
-
-Uploads a video chunk.
-
-Request:
-multipart/form-data
-file: binary chunk data
-
-Response:
+### Register Webhook
+`POST /v1/webhooks`
+**Headers:** `X-API-Key: <your_key>`
+**Request Body:**
+```json
 {
-  "status": "chunk stored"
+  "url": "https://yourapp.com/events",
+  "events": ["upload.completed", "playback.requested"]
 }
+```
 
-Behavior:
-- Stores chunk in storage
-- Associates chunk with upload session
+### List Webhooks
+`GET /v1/webhooks?owner=self`
 
----
-
-## 2.2 Get Chunk (Future)
-
-GET /chunk/{video_id}/{chunk_id}
-
-Returns specific chunk.
-
-Used for:
-- Streaming
-- Byte-range playback
+### Delete Webhook
+`DELETE /v1/webhooks/{webhook_id}`
 
 ---
 
-## 2.3 Stream Video (Future)
-
-GET /stream/{video_id}
-
-Streams video using byte-range reads.
+## 1.5 System Metrics
+`GET /v1/metrics`
+Returns aggregate platform data including total video count, storage size in bytes, total duration, and system resource limits.
 
 ---
 
-# 3. Event Hooks (Future)
+# 2. Data Plane APIs (Port 8001)
 
-Webhooks notify application when events happen.
+## 2.1 Chunk Upload & Resumption
 
-Examples:
-
-POST /webhook/upload-complete
-POST /webhook/video-ready
-
-Used for:
-- Encoding pipeline
-- Notifications
-- Analytics
-
----
-
-# 4. Error Handling
-
-Standard error format:
-
+### Get Upload Status (Resumable Uploads)
+`GET /v1/upload-session/{session_id}`
+Returns a list of already uploaded chunks so the client can resume safely.
+**Response:**
+```json
 {
-  "error": "message",
-  "code": "ERROR_CODE"
+  "session": "uuid",
+  "uploaded_chunks": [0, 1, 2, 5]
 }
+```
 
-Examples:
-SESSION_NOT_FOUND
-UPLOAD_FAILED
-ACCESS_DENIED
-
----
-
-# 5. Authentication (Future)
-
-Planned methods:
-
-- API Keys
-- OAuth tokens
-- Signed upload URLs
+### Upload Chunk
+`POST /v1/upload-chunk/{session_id}/chunk_{index}/{index}`
+Uploads physical binary video data.
+**Request:** `multipart/form-data` containing the file byte chunk.
 
 ---
 
-# 6. Versioning
+## 2.2 Streaming
 
-API versioning will use URL prefix:
-
-/v1/upload-session
-/v1/upload-chunk
-
-This allows backward compatibility.
-
----
-
-# 7. Design Principles
-
-- Developer-first
-- Simple upload workflow
-- Clear separation of control and data planes
-- Reusable video assets
-- Scalable for large video files
+### Fetch Playlist / Video Segments
+`GET /hls/{video_id}/{filename}`
+Serves actual HLS streams (`.m3u8` and `.ts` files) from storage or Walrus.
+Requires valid signature parameters derived from `/v1/playback-url`.

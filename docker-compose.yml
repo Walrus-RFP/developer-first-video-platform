@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: walrus_user
+      POSTGRES_PASSWORD: walrus_password
+      POSTGRES_DB: walrus_video
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U walrus_user -d walrus_video" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  control-plane:
+    build: .
+    command: uvicorn control_plane.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    dns:
+      - 8.8.8.8
+    environment:
+      - DATABASE_URL=postgresql+psycopg2://walrus_user:walrus_password@db:5432/walrus_video
+      - DATA_PLANE_URL=http://data-plane:8001
+      - WALRUS_AGGREGATOR=https://aggregator.testnet.sui.io:443
+      - WALRUS_PUBLISHER=https://publisher.testnet.sui.io:443
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./storage:/app/storage
+
+  data-plane:
+    build: .
+    command: uvicorn data_plane.stream_server:app --host 0.0.0.0 --port 8001
+    ports:
+      - "8001:8001"
+    environment:
+      - DATABASE_URL=postgresql+psycopg2://walrus_user:walrus_password@db:5432/walrus_video
+      - WALRUS_AGGREGATOR=https://aggregator.testnet.sui.io:443
+      - WALRUS_PUBLISHER=https://publisher.testnet.sui.io:443
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./storage:/app/storage
+
+  sui-auth-proxy:
+    build: ./sui-auth-proxy
+    ports:
+      - "8002:8002"
+
+volumes:
+  postgres_data:

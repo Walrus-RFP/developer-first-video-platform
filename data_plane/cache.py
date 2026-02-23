@@ -2,6 +2,7 @@ import collections
 import os
 import shutil
 from utils.walrus import read_blob
+from utils.logger import logger
 
 CACHE_DIR = os.path.join("storage", "cache")
 os.makedirs(CACHE_DIR, exist_ok=True)
@@ -17,20 +18,26 @@ class ChunkCache:
         # 1. Memory Check
         if blob_id in self.ram_cache:
             self.ram_cache.move_to_end(blob_id)
-            print(f"[CACHE HIT - RAM] {blob_id}")
+            logger.debug("Cache HIT (RAM)", extra={"blob_id": blob_id})
             return self.ram_cache[blob_id]
         
         # 2. Disk Check
         disk_path = os.path.join(CACHE_DIR, blob_id)
         if os.path.exists(disk_path):
-            print(f"[CACHE HIT - DISK] {blob_id}")
+            logger.debug("Cache HIT (disk)", extra={"blob_id": blob_id})
+            # Update access time for LRU
+            try:
+                os.utime(disk_path, None) 
+            except OSError:
+                pass
+                
             with open(disk_path, "rb") as f:
                 data = f.read()
             self._add_to_ram(blob_id, data)
             return data
             
         # 3. Walrus Fetch
-        print(f"[CACHE MISS] Fetching {blob_id} from Walrus...")
+        logger.info("Cache MISS — fetching from Walrus", extra={"blob_id": blob_id})
         data = read_blob(blob_id)
         
         if not data:
@@ -45,34 +52,52 @@ class ChunkCache:
         while self.current_ram_size + data_len > self.max_ram_size and self.ram_cache:
             old_id, old_data = self.ram_cache.popitem(last=False)
             self.current_ram_size -= len(old_data)
-            print(f"[CACHE EVICT - RAM] {old_id}")
+            logger.debug("Cache evict (RAM)", extra={"blob_id": old_id})
             
         self.ram_cache[blob_id] = data
         self.current_ram_size += data_len
         self.ram_cache.move_to_end(blob_id)
 
     def _add_to_disk(self, blob_id: str, data: bytes):
-        # Very simple disk limit check (just count files or total dir size)
-        # For speed, we'll just check if the directory is roughly over limit
-        # In a real system we'd use a more precise LRU for disk too
         disk_path = os.path.join(CACHE_DIR, blob_id)
-        
-        # If disk is getting full, just clear it (simplest way for now)
-        # This is better than out of disk space errors
-        # Note: In production we would do something more surgical
-        # But for this RFP, clearing cache if over 2GB is reasonable
-        total_size = sum(os.path.getsize(os.path.join(CACHE_DIR, f)) for f in os.listdir(CACHE_DIR) if os.path.isfile(os.path.join(CACHE_DIR, f)))
-        if total_size + len(data) > self.max_disk_size:
-            print("[CACHE CLEANUP - DISK] Clearing disk cache to free space")
-            for f in os.listdir(CACHE_DIR):
-                file_p = os.path.join(CACHE_DIR, f)
+        data_len = len(data)
+
+        # 1. Calculate current size
+        files = []
+        total_size = 0
+        for f in os.listdir(CACHE_DIR):
+            f_path = os.path.join(CACHE_DIR, f)
+            if os.path.isfile(f_path):
+                f_size = os.path.getsize(f_path)
+                # Store path, size, and last access/modified time
+                files.append({
+                    "path": f_path,
+                    "size": f_size,
+                    "atime": os.path.getatime(f_path)
+                })
+                total_size += f_size
+
+        # 2. Evict until we have enough space
+        if total_size + data_len > self.max_disk_size:
+            # Sort by access time (oldest first)
+            files.sort(key=lambda x: x["atime"])
+            
+            evicted_count = 0
+            while total_size + data_len > self.max_disk_size and files:
+                oldest = files.pop(0)
                 try:
-                    if os.path.isfile(file_p): os.unlink(file_p)
-                except: pass
+                    os.unlink(oldest["path"])
+                    total_size -= oldest["size"]
+                    evicted_count += 1
+                except OSError:
+                    pass
+            
+            if evicted_count > 0:
+                logger.info("Disk cache LRU eviction triggered", extra={"evicted_count": evicted_count})
 
         with open(disk_path, "wb") as f:
             f.write(data)
-        print(f"[CACHE SAVED - DISK] {blob_id}")
+        logger.debug("Cache saved (disk)", extra={"blob_id": blob_id})
 
 # Global singleton cache for the data plane
 chunk_cache = ChunkCache()
