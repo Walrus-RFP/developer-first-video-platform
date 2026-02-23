@@ -37,6 +37,15 @@ app.include_router(upload_router, prefix="/v1")
 def root():
     return {"message": "Control plane running", "api_version": "v1"}
 
+@app.get("/v1/debug-logs")
+def get_logs():
+    try:
+        with open("app.log", "r") as f:
+            lines = f.readlines()
+            return {"logs": "".join(lines[-100:])}
+    except Exception as e:
+        return {"error": str(e)}
+
 
 @app.get("/v1/metrics")
 def metrics():
