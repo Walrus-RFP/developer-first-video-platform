@@ -117,9 +117,6 @@ def remove_webhook(webhook_id: str, owner: str = Depends(get_current_user)):
     return {"status": "deleted"}
 
 
-# serve demo player
-app.mount("/demo", StaticFiles(directory="demo", html=True), name="demo")
-
 # serve HLS
 os.makedirs("storage/hls", exist_ok=True)
 app.mount("/hls", StaticFiles(directory="storage/hls"), name="hls")
