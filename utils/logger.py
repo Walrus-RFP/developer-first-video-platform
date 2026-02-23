@@ -34,9 +34,16 @@ class JSONFormatter(logging.Formatter):
 def _build_logger(name: str = "walrus") -> logging.Logger:
     log = logging.getLogger(name)
     if not log.handlers:
-        handler = logging.StreamHandler(sys.stdout)
-        handler.setFormatter(JSONFormatter())
-        log.addHandler(handler)
+        # Console handler
+        stdout_handler = logging.StreamHandler(sys.stdout)
+        stdout_handler.setFormatter(JSONFormatter())
+        log.addHandler(stdout_handler)
+        
+        # File handler for remote debugging
+        file_handler = logging.FileHandler("app.log", mode="a")
+        file_handler.setFormatter(JSONFormatter())
+        log.addHandler(file_handler)
+        
         log.setLevel(logging.DEBUG)
         log.propagate = False
     return log
