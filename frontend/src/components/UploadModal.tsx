@@ -70,7 +70,7 @@ export default function UploadModal({ onClose, onSuccess }: { onClose: () => voi
                 const chunk = file.slice(start, end);
 
                 const formData = new FormData();
-                formData.append("file", chunk);
+                formData.append("file", chunk, `chunk_${i}`);
 
                 const chunkResp = await fetch(`${DATA_PLANE}/upload-chunk/${sessionId}/chunk_${i}/${i}`, {
                     method: "POST",

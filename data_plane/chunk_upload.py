@@ -27,6 +27,8 @@ async def upload_chunk(
     # if we wanted to dual-write. For now we only write to Walrus.
 
     content = await file.read()
+    if len(content) == 0:
+        raise HTTPException(status_code=400, detail="Uploaded chunk is empty (0 bytes). Check FormData encoding.")
 
     manifest_path = os.path.join(session_dir, "manifest.json")
 
