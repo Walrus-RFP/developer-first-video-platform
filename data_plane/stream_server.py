@@ -22,13 +22,14 @@ app = FastAPI()
 
 from control_plane.rate_limit import RateLimitMiddleware
 
-app.add_middleware(RateLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(RateLimitMiddleware)
+
 
 app.include_router(chunk_router, prefix="/v1")
 
