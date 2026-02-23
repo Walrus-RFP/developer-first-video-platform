@@ -10,7 +10,7 @@ SECRET = os.environ.get("SIGNING_SECRET", _DEFAULT_SECRET)
 if SECRET == _DEFAULT_SECRET:
     logger.warning("Using default signing secret. Set SIGNING_SECRET env var in production!")
 DATA_PLANE_URL = os.environ.get("DATA_PLANE_URL", "http://127.0.0.1:8001")
-PUBLIC_DATA_PLANE_URL = os.environ.get("PUBLIC_DATA_PLANE_URL", "http://localhost:8001")
+PUBLIC_DATA_PLANE_URL = os.environ.get("PUBLIC_DATA_PLANE_URL", DATA_PLANE_URL)
 
 
 # =====================================================
