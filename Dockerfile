@@ -2,8 +2,16 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# Install system dependencies (ffmpeg for HLS encoding, libpq-dev/gcc for PostgreSQL)
-RUN apt-get update && apt-get install -y ffmpeg libpq-dev gcc && rm -rf /var/lib/apt/lists/*
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    libpq-dev \
+    gcc \
+    build-essential \
+    libssl-dev \
+    libffi-dev \
+    python3-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install python dependencies
 COPY requirements.txt .
