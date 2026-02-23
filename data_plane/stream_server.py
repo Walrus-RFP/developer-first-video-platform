@@ -115,21 +115,27 @@ def play_video(video_id: str, request: Request):
         }
 
         # Log egress usage
-        log_usage(video_id, video.get("owner", "unknown"), "egress", end - start + 1)
+        try:
+            log_usage(video_id, video.get("owner", "unknown") if video else "unknown", "egress", end - start + 1)
+        except Exception:
+            pass
 
         return StreamingResponse(
-            stream_byte_range(video_id, start, end, encryption_key=video.get("encryption_key")),
+            stream_byte_range(video_id, start, end, encryption_key=video.get("encryption_key") if video else None),
             status_code=206,
             headers=headers,
         )
 
     # Log egress usage
-    log_usage(video_id, video.get("owner", "unknown"), "egress", file_size)
+    try:
+        log_usage(video_id, video.get("owner", "unknown") if video else "unknown", "egress", file_size)
+    except Exception:
+        pass
 
     # Note: Full MP4 decryption is expensive for large files.
     # In production, we primarily force HLS for encrypted content.
     return StreamingResponse(
-        stream_byte_range(video_id, 0, file_size - 1, encryption_key=video.get("encryption_key")),
+        stream_byte_range(video_id, 0, file_size - 1, encryption_key=video.get("encryption_key") if video else None),
         headers={"Content-Type": "video/mp4"},
     )
 
@@ -192,7 +198,12 @@ def serve_hls_file(video_id: str, file_path: str, request: Request):
         data = chunk_cache.get_chunk(blob_id)
         
         # Seal-based Decryption
-        video = get_video(video_id)
+        video = None
+        try:
+            video = get_video(video_id)
+        except Exception as db_e:
+            logger.warning("Data Plane DB absent or uninitialized, cannot fetch encryption key: %s", db_e)
+
         if video and video.get("encryption_key"):
             from utils.crypto import decrypt_data
             try:
@@ -204,7 +215,10 @@ def serve_hls_file(video_id: str, file_path: str, request: Request):
 
         # Log egress usage
         owner = video.get("owner", "unknown") if video else "unknown"
-        log_usage(video_id, owner, "egress", len(data))
+        try:
+            log_usage(video_id, owner, "egress", len(data))
+        except Exception as db_e:
+            logger.warning("Could not log egress usage: %s", db_e)
 
         if requested_path.endswith(".m3u8"):
             content = data.decode()
@@ -235,11 +249,16 @@ def serve_hls_file(video_id: str, file_path: str, request: Request):
         raise HTTPException(404, f"HLS file not found: {requested_path}")
 
     # Log egress usage
-    video = get_video(video_id)
+    video = None
+    try:
+        video = get_video(video_id)
+    except Exception as db_e:
+        logger.warning("Data Plane DB absent or uninitialized: %s", db_e)
+
     owner = video.get("owner", "unknown") if video else "unknown"
     try:
         log_usage(video_id, owner, "egress", os.path.getsize(path))
-    except:
+    except Exception as db_e:
         pass
 
     # playlist vs segment
