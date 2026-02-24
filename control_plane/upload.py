@@ -615,7 +615,8 @@ def playback(video_id: str, user_address: str = None):
     else:
         logger.debug("Video is public — bypassing auth", extra={"video_id": video_id})
 
-    signed = create_signed_url(video_id, "playlist.m3u8")
+    encryption_key = video.get("encryption_key")
+    signed = create_signed_url(video_id, "playlist.m3u8", encryption_key=encryption_key)
 
     # Fire webhook event
     fire_event("playback.requested", {

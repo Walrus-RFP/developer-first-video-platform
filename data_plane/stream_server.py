@@ -81,11 +81,8 @@ def play_video(video_id: str, request: Request):
     if not verify_signed_url(video_id, request.query_params):
         raise HTTPException(403, "Invalid or expired signed URL")
 
-    # The video metadata confirms the existence of the video, though
-    # the actual content is in Walrus chunks.
-    video = get_video(video_id)
-    if not video:
-        raise HTTPException(404, "Video not found")
+    # We rely on the Walrus manifest to verify video context,
+    # as the stateless edge Data Plane does not query local metadata.
 
     # Load the session manifest to find the total video size
     manifest_path = os.path.join(HLS_DIR, video_id, "manifest.json")
@@ -114,28 +111,31 @@ def play_video(video_id: str, request: Request):
             "Content-Type": "video/mp4",
         }
 
+    encryption_key = request.query_params.get("key")
+
+    if headers:
         # Log egress usage
         try:
-            log_usage(video_id, video.get("owner", "unknown") if video else "unknown", "egress", end - start + 1)
+            log_usage(video_id, "unknown", "egress", end - start + 1)
         except Exception:
             pass
 
         return StreamingResponse(
-            stream_byte_range(video_id, start, end, encryption_key=video.get("encryption_key") if video else None),
+            stream_byte_range(video_id, start, end, encryption_key=encryption_key),
             status_code=206,
             headers=headers,
         )
 
     # Log egress usage
     try:
-        log_usage(video_id, video.get("owner", "unknown") if video else "unknown", "egress", file_size)
+        log_usage(video_id, "unknown", "egress", file_size)
     except Exception:
         pass
 
     # Note: Full MP4 decryption is expensive for large files.
     # In production, we primarily force HLS for encrypted content.
     return StreamingResponse(
-        stream_byte_range(video_id, 0, file_size - 1, encryption_key=video.get("encryption_key") if video else None),
+        stream_byte_range(video_id, 0, file_size - 1, encryption_key=encryption_key),
         headers={"Content-Type": "video/mp4"},
     )
 
@@ -198,27 +198,22 @@ def serve_hls_file(video_id: str, file_path: str, request: Request):
         data = chunk_cache.get_chunk(blob_id)
         
         # Seal-based Decryption
-        video = None
-        try:
-            video = get_video(video_id)
-        except Exception as db_e:
-            logger.warning("Data Plane DB absent or uninitialized, cannot fetch encryption key: %s", db_e)
+        encryption_key = request.query_params.get("key")
 
-        if video and video.get("encryption_key"):
+        if encryption_key:
             from utils.crypto import decrypt_data
             try:
-                data = decrypt_data(data, video["encryption_key"])
+                data = decrypt_data(data, encryption_key)
                 logger.debug("Decrypted blob data for playback", extra={"video_id": video_id, "path": requested_path})
             except Exception as de:
                 logger.error("Failed to decrypt blob", extra={"error": str(de), "video_id": video_id})
                 raise HTTPException(500, "Content decryption failed")
 
         # Log egress usage
-        owner = video.get("owner", "unknown") if video else "unknown"
         try:
-            log_usage(video_id, owner, "egress", len(data))
+            log_usage(video_id, "unknown", "egress", len(data))
         except Exception as db_e:
-            logger.warning("Could not log egress usage: %s", db_e)
+            pass
 
         if requested_path.endswith(".m3u8"):
             content = data.decode()
@@ -249,15 +244,8 @@ def serve_hls_file(video_id: str, file_path: str, request: Request):
         raise HTTPException(404, f"HLS file not found: {requested_path}")
 
     # Log egress usage
-    video = None
     try:
-        video = get_video(video_id)
-    except Exception as db_e:
-        logger.warning("Data Plane DB absent or uninitialized: %s", db_e)
-
-    owner = video.get("owner", "unknown") if video else "unknown"
-    try:
-        log_usage(video_id, owner, "egress", os.path.getsize(path))
+        log_usage(video_id, "unknown", "egress", os.path.getsize(path))
     except Exception as db_e:
         pass
 

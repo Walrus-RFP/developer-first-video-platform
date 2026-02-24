@@ -16,17 +16,22 @@ PUBLIC_DATA_PLANE_URL = os.environ.get("PUBLIC_DATA_PLANE_URL", DATA_PLANE_URL)
 # =====================================================
 # CREATE SIGNED URL
 # =====================================================
-def create_signed_url(video_id: str, file: str = "playlist.m3u8", expiry_seconds=3600):
+def create_signed_url(video_id: str, file: str = "playlist.m3u8", expiry_seconds=3600, encryption_key: str = None):
 
     exp = int(time.time()) + expiry_seconds
-    message = f"{video_id}:{exp}".encode()
+    
+    if encryption_key:
+        message = f"{video_id}:{exp}:{encryption_key}".encode()
+    else:
+        message = f"{video_id}:{exp}".encode()
 
     sig = hmac.new(SECRET.encode(), message, hashlib.sha256).hexdigest()
 
-    return (
-        f"{PUBLIC_DATA_PLANE_URL}/play/{video_id}/{file}"
-        f"?exp={exp}&sig={sig}"
-    )
+    url = f"{PUBLIC_DATA_PLANE_URL}/play/{video_id}/{file}?exp={exp}&sig={sig}"
+    if encryption_key:
+        url += f"&key={encryption_key}"
+        
+    return url
 
 
 # =====================================================
@@ -36,6 +41,7 @@ def verify_signed_url(video_id: str, params, file: str = "playlist.m3u8"):
 
     exp = params.get("exp")
     sig = params.get("sig")
+    key = params.get("key")
 
     if not exp or not sig:
         return False
@@ -43,7 +49,11 @@ def verify_signed_url(video_id: str, params, file: str = "playlist.m3u8"):
     if int(exp) < int(time.time()):
         return False
 
-    message = f"{video_id}:{exp}".encode()
+    if key:
+        message = f"{video_id}:{exp}:{key}".encode()
+    else:
+        message = f"{video_id}:{exp}".encode()
+        
     expected = hmac.new(SECRET.encode(), message, hashlib.sha256).hexdigest()
 
     return hmac.compare_digest(expected, sig)
