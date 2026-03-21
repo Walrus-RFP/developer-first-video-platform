@@ -51,8 +51,8 @@ PUBLIC_DATA_PLANE = os.getenv("PUBLIC_DATA_PLANE_URL", "http://localhost:8001")
 AGGREGATOR = os.getenv("WALRUS_AGGREGATOR", "https://aggregator.walrus-testnet.walrus.space")
 PUBLISHER = os.getenv("WALRUS_PUBLISHER", "https://publisher.walrus-testnet.walrus.space")
 
-# HLS assets stored with enough epochs to last ~1 year on testnet
-HLS_EPOCHS = int(os.getenv("WALRUS_HLS_EPOCHS", "200"))
+# HLS assets epoch retention — testnet max is ~53 epochs, default to 50
+HLS_EPOCHS = int(os.getenv("WALRUS_HLS_EPOCHS", "50"))
 
 os.makedirs(STORAGE_DIR, exist_ok=True)
 os.makedirs(UPLOAD_DIR, exist_ok=True)

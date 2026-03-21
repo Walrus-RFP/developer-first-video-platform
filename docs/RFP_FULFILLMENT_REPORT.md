@@ -59,7 +59,7 @@ Deployed on Sui testnet. `is_authorized` is called read-only via `devInspectTran
 ### 5. Walrus Storage Integration
 **Status: Complete & Tested** · `utils/walrus.py`, `tests/test_walrus.py`
 
-- Upload chunks stored with configurable epoch retention (`WALRUS_CHUNK_EPOCHS=5` temp, `WALRUS_HLS_EPOCHS=200` long-lived)
+- Upload chunks stored with configurable epoch retention (`WALRUS_CHUNK_EPOCHS=5` temp, `WALRUS_HLS_EPOCHS=50` long-lived)
 - Adaptive retry with exponential backoff (up to 5 attempts, 5+ minute window for testnet propagation delays)
 - Deduplication via `alreadyCertified` handling; fast-fail on 404 (blob permanently pruned)
 - Blob IDs stored in per-video `manifest.json` for deterministic retrieval
