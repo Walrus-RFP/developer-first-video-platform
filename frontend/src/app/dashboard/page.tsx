@@ -143,7 +143,7 @@ export default function Dashboard() {
             <section className="space-y-6">
                 <div className="flex flex-col md:flex-row items-start md:items-end justify-between border-b border-white/5 pb-4 gap-4">
                     <div className="flex gap-6">
-                        {(["all", "mine", ...(account ? ["api_keys", "access"] : [])] as const).map((type) => {
+                        {(["all", "mine", ...(account ? ["api_keys", "access"] : [])] as ("all" | "mine" | "api_keys" | "access")[]).map((type) => {
                             const labels: Record<string, string> = { all: "Global Feed", mine: "My Library", api_keys: "API Keys", access: "Access Control" };
                             const colors: Record<string, string> = { all: "#E8372C", mine: "#F5C518", api_keys: "#2E5CE6", access: "#2D9448" };
                             return (
