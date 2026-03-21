@@ -111,13 +111,13 @@ export default function UploadModal({ onClose, onSuccess }: { onClose: () => voi
                 throw new Error(errorData.detail || "Upload completion failed");
             }
 
-            // 4. Poll for status (timeout after 10 minutes)
+            // 4. Poll for status (timeout after 20 minutes)
             let completeData = null;
-            const POLL_TIMEOUT_MS = 10 * 60 * 1000;
+            const POLL_TIMEOUT_MS = 20 * 60 * 1000;
             const pollStart = Date.now();
             while (true) {
                 if (Date.now() - pollStart > POLL_TIMEOUT_MS) {
-                    throw new Error("Upload processing timed out after 10 minutes. Check backend logs.");
+                    throw new Error("Upload processing timed out after 20 minutes. Check backend logs.");
                 }
                 await new Promise(resolve => setTimeout(resolve, 3000));
 
