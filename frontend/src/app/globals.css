@@ -3,17 +3,27 @@
 @theme {
   --color-background: #000000;
   --color-foreground: #ffffff;
-  --color-subtle: #111111;
-  --color-muted: #666666;
-  --color-accent: #ffffff;
+  --color-subtle: #0a0a0a;
+  --color-muted: #777777;
+  --color-border: #1c1c1c;
+
+  /* WalStream brand palette — from logo */
+  --color-brand-red:    #E8372C;
+  --color-brand-yellow: #F5C518;
+  --color-brand-blue:   #2E5CE6;
+  --color-brand-green:  #2D9448;
 }
 
 :root {
   --background: #000000;
   --foreground: #ffffff;
-  --subtle: #111111;
-  --muted: #666666;
-  --accent: #ffffff;
+  --subtle:     #0a0a0a;
+  --muted:      #777777;
+  --border:     #1c1c1c;
+  --brand-red:    #E8372C;
+  --brand-yellow: #F5C518;
+  --brand-blue:   #2E5CE6;
+  --brand-green:  #2D9448;
 }
 
 body {
@@ -24,37 +34,62 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+.font-display {
+  font-family: 'Bebas Neue', sans-serif;
+  letter-spacing: 0.04em;
+}
+
+code, pre, .font-mono {
+  font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+}
+
 @layer base {
-  * {
-    @apply border-white/10;
-  }
+  * { @apply border-[#1c1c1c]; }
 }
 
+/* Cards */
+.ws-card {
+  background: #0a0a0a;
+  border: 1px solid #1c1c1c;
+  border-radius: 12px;
+}
+
+.ws-card-red    { border-top: 2px solid var(--brand-red); }
+.ws-card-yellow { border-top: 2px solid var(--brand-yellow); }
+.ws-card-blue   { border-top: 2px solid var(--brand-blue); }
+.ws-card-green  { border-top: 2px solid var(--brand-green); }
+
+/* Legacy alias used by other components */
 .glass-card {
-  @apply bg-white/[0.03] backdrop-blur-xl border border-white/10;
+  background: #0a0a0a;
+  border: 1px solid #1c1c1c;
 }
 
+/* Buttons */
 .btn-primary {
-  @apply bg-white text-black px-6 py-2 rounded-full font-medium transition-all hover:bg-white/90 active:scale-95 disabled:bg-white/50;
+  @apply px-6 py-2.5 rounded-full font-semibold text-sm transition-all active:scale-95 disabled:opacity-30;
+  background: var(--brand-red);
+  color: #fff;
 }
+.btn-primary:hover { background: #c7291f; }
 
 .btn-secondary {
-  @apply border border-white/20 px-6 py-2 rounded-full font-medium transition-all hover:bg-white/5 active:scale-95;
+  @apply px-6 py-2.5 rounded-full font-semibold text-sm border transition-all active:scale-95;
+  border-color: #2a2a2a;
+  color: #888;
 }
+.btn-secondary:hover { border-color: #444; color: #fff; }
 
-::-webkit-scrollbar {
-  width: 8px;
+/* Tag / badge */
+.ws-tag {
+  @apply text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded;
 }
+.ws-tag-red    { background: rgba(232,55,44,0.12); color: var(--brand-red); }
+.ws-tag-yellow { background: rgba(245,197,24,0.12); color: var(--brand-yellow); }
+.ws-tag-blue   { background: rgba(46,92,230,0.12);  color: var(--brand-blue); }
+.ws-tag-green  { background: rgba(45,148,72,0.12);  color: var(--brand-green); }
 
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #222;
-  border-radius: 10px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #333;
-}
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #1c1c1c; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: #2a2a2a; }

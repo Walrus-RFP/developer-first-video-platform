@@ -142,7 +142,7 @@ function VideoAccessPanel({ video, apiKey }: VideoAccessPanelProps) {
     };
 
     return (
-        <div className="glass-card rounded-2xl border border-white/5 overflow-hidden">
+        <div className="ws-card rounded-2xl border border-white/5 overflow-hidden">
             <button
                 className="w-full flex items-center justify-between p-5 hover:bg-white/5 transition-colors"
                 onClick={() => setExpanded(!expanded)}
@@ -304,7 +304,7 @@ export default function AccessControlView({ address }: AccessControlViewProps) {
                     <h3 className="text-lg font-bold">Access Control</h3>
                     <p className="text-muted text-sm">Manage who can watch your private videos.</p>
                 </div>
-                <div className="glass-card rounded-2xl p-6 border border-white/5 space-y-4">
+                <div className="ws-card rounded-2xl p-6 border border-white/5 space-y-4">
                     <p className="text-sm text-muted">Enter your API key to manage access grants:</p>
                     <div className="flex gap-3">
                         <input

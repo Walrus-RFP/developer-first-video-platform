@@ -94,7 +94,7 @@ export default function ApiKeysView({ address }: ApiKeysViewProps) {
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex items-center justify-between border-b border-white/5 pb-6">
                 <div>
-                    <h2 className="text-2xl font-bold tracking-tight">API Keys</h2>
+                    <h2 className="font-display text-3xl">API Keys</h2>
                     <p className="text-muted text-sm mt-1 max-w-xl">
                         Manage the developer keys used to authenticate API requests to the Control Plane for uploading and managing videos.
                     </p>
@@ -109,7 +109,7 @@ export default function ApiKeysView({ address }: ApiKeysViewProps) {
             </div>
 
             {showNewForm && (
-                <div className="glass-card rounded-2xl p-6 border border-white/10 flex items-end gap-4 max-w-xl">
+                <div className="ws-card rounded-2xl p-6 border border-white/10 flex items-end gap-4 max-w-xl">
                     <div className="flex-1 space-y-2">
                         <label className="text-xs text-muted uppercase tracking-widest font-semibold">Key Name</label>
                         <input
@@ -145,7 +145,7 @@ export default function ApiKeysView({ address }: ApiKeysViewProps) {
                     ))}
                 </div>
             ) : keys.length === 0 ? (
-                <div className="py-16 text-center border border-dashed border-white/10 rounded-2xl glass-card">
+                <div className="py-16 text-center border border-dashed border-white/10 rounded-2xl ws-card">
                     <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
                         <Key className="text-muted" size={24} />
                     </div>
@@ -158,7 +158,7 @@ export default function ApiKeysView({ address }: ApiKeysViewProps) {
             ) : (
                 <div className="grid gap-4">
                     {keys.map((keyObj) => (
-                        <div key={keyObj.key} className="glass-card rounded-2xl p-6 flex items-center justify-between group border border-transparent hover:border-white/5 transition-colors">
+                        <div key={keyObj.key} className="ws-card rounded-2xl p-6 flex items-center justify-between group border border-transparent hover:border-white/5 transition-colors">
                             <div className="space-y-1">
                                 <h3 className="font-semibold">{keyObj.name}</h3>
                                 <div className="flex items-center gap-3">

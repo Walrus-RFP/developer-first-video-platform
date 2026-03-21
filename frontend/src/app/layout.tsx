@@ -17,21 +17,21 @@ export default function RootLayout({
     return (
         <html lang="en">
             <head>
+                <link rel="icon" href="/logo.jpeg" />
                 <link rel="preconnect" href="https://fonts.googleapis.com" />
                 <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-                <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+                <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
             </head>
             <body className="antialiased">
                 <SuiProvider>
-                    <nav className="fixed top-0 w-full z-50 border-b border-white/5 bg-black/50 backdrop-blur-md">
+                    <nav className="fixed top-0 w-full z-50 bg-black/50 backdrop-blur-md" style={{ borderBottom: "1px solid #1c1c1c" }}>
                         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-                            <div className="flex items-center">
-                                <Image src="/logo.jpeg" alt="WalStream" width={120} height={40} className="object-contain" />
-                            </div>
-                            <div className="flex items-center gap-6 text-sm font-medium text-muted hover:text-foreground transition-colors">
-                                <a href="#">Solutions</a>
-                                <a href="#">Network</a>
-                                <a href="#">Pricing</a>
+                            <a href="/">
+                                <Image src="/logo.jpeg" alt="WalStream" width={74} height={74} className="object-contain rounded-md" />
+                            </a>
+                            <div className="flex items-center gap-6">
+                                <a href="/" className="text-sm text-muted hover:text-white transition-colors tracking-wide">Home</a>
+                                <a href="/dashboard" className="text-sm text-muted hover:text-white transition-colors tracking-wide">Dashboard</a>
                                 <WalletConnect />
                             </div>
                         </div>
@@ -39,20 +39,20 @@ export default function RootLayout({
                     <main className="pt-16 min-h-screen">
                         {children}
                     </main>
-                    <footer className="border-t border-white/5 py-20 px-6">
-                        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12">
-                            <div className="space-y-4">
-                                <div className="flex items-center">
-                                    <Image src="/logo.jpeg" alt="WalStream" width={100} height={34} className="object-contain" />
+                    <footer className="border-t border-white/5 py-10 px-6">
+                        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                            <div className="flex items-center gap-4">
+                                <Image src="/logo.jpeg" alt="WalStream" width={36} height={36} className="object-contain rounded-md" />
+                                <div>
+                                    <p className="text-sm font-semibold">WalStream</p>
+                                    <p className="text-xs text-muted">Developer-first video infrastructure on Sui & Walrus</p>
                                 </div>
-                                <p className="text-xs text-muted leading-relaxed">
-                                    Developer-first video infrastructure on Sui & Walrus. Upload once, stream anywhere.
-                                </p>
                             </div>
-                            <div />
-                            <div />
-                            <div className="text-right">
-                                <p className="text-xs text-muted">© 2026 WalStream. All rights reserved.</p>
+                            <div className="flex items-center gap-6">
+                                <p className="text-[10px] tracking-[0.25em] font-bold">
+                                    <span style={{ color: "#E8372C" }}>UPLOAD</span> · <span style={{ color: "#F5C518" }}>STREAM</span> · <span style={{ color: "#2D9448" }}>OWN</span>
+                                </p>
+                                <p className="text-xs text-muted">© 2026 WalStream</p>
                             </div>
                         </div>
                     </footer>

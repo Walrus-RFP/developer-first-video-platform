@@ -48,10 +48,10 @@ export default function DashboardStats() {
     };
 
     const statItems = [
-        { label: "ASSETS STORED", value: metrics.total_videos, icon: PlayCircle },
-        { label: "WALRUS CAPACITY", value: formatSize(metrics.total_storage_bytes), icon: HardDrive },
-        { label: "READ VOLUME", value: formatSize(metrics.bandwidth?.egress_total || 0), icon: Globe },
-        { label: "INGRESS (LIFETIME)", value: formatSize(metrics.bandwidth?.ingress_total || 0), icon: Activity },
+        { label: "ASSETS STORED", value: metrics.total_videos, icon: PlayCircle, accent: "ws-card-red", iconColor: "text-[#E8372C]" },
+        { label: "WALRUS CAPACITY", value: formatSize(metrics.total_storage_bytes), icon: HardDrive, accent: "ws-card-yellow", iconColor: "text-[#F5C518]" },
+        { label: "READ VOLUME", value: formatSize(metrics.bandwidth?.egress_total || 0), icon: Globe, accent: "ws-card-blue", iconColor: "text-[#2E5CE6]" },
+        { label: "INGRESS (LIFETIME)", value: formatSize(metrics.bandwidth?.ingress_total || 0), icon: Activity, accent: "ws-card-green", iconColor: "text-[#2D9448]" },
     ];
 
     return (
@@ -62,11 +62,11 @@ export default function DashboardStats() {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.1 }}
-                    className="glass-card p-6 rounded-2xl space-y-3"
+                    className={`ws-card ${item.accent} p-6 rounded-2xl space-y-3`}
                 >
-                    <div className="flex items-center gap-2 text-muted">
-                        <item.icon size={14} className="opacity-50" />
-                        <span className="text-[10px] tracking-widest font-bold uppercase">{item.label}</span>
+                    <div className="flex items-center gap-2">
+                        <item.icon size={14} className={item.iconColor} />
+                        <span className="text-[10px] tracking-widest font-bold uppercase text-muted">{item.label}</span>
                     </div>
                     <div className="text-2xl font-bold tracking-tight">{item.value}</div>
                 </motion.div>

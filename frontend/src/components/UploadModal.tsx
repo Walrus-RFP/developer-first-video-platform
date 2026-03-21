@@ -246,7 +246,7 @@ export default function UploadModal({ onClose, onSuccess }: { onClose: () => voi
             <motion.div
                 initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                className="w-full max-w-xl glass-card rounded-3xl p-10 relative overflow-hidden"
+                className="w-full max-w-xl ws-card rounded-3xl p-10 relative overflow-hidden"
             >
                 <button onClick={onClose} className="absolute top-6 right-6 text-muted hover:text-white transition-colors">
                     <X size={24} />
@@ -254,7 +254,7 @@ export default function UploadModal({ onClose, onSuccess }: { onClose: () => voi
 
                 <div className="space-y-8">
                     <div className="space-y-2">
-                        <h2 className="text-3xl font-bold tracking-tight">ENLIST ASSET.</h2>
+                        <h2 className="font-display text-4xl">ENLIST ASSET.</h2>
                         <p className="text-muted text-sm">Upload your video to the WalStream decentralized network.</p>
                     </div>
 
@@ -344,7 +344,7 @@ export default function UploadModal({ onClose, onSuccess }: { onClose: () => voi
                             <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto">
                                 <Check size={40} className="text-black" />
                             </div>
-                            <p className="font-bold text-xl tracking-tight">MISSION SUCCESS.</p>
+                            <p className="font-display text-3xl">MISSION SUCCESS.</p>
                         </div>
                     )}
 

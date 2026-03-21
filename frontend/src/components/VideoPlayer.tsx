@@ -161,7 +161,7 @@ export default function VideoPlayer({ videoId, playbackUrl, onClose }: VideoPlay
 
             <div className="w-full max-w-7xl grid grid-cols-1 xl:grid-cols-5 gap-8 my-auto">
                 {/* Left Side: Video Player */}
-                <div ref={containerRef} className="xl:col-span-3 aspect-video relative group glass-card rounded-3xl overflow-hidden shadow-2xl bg-black">
+                <div ref={containerRef} className="xl:col-span-3 aspect-video relative group ws-card rounded-3xl overflow-hidden shadow-2xl bg-black">
                     <video
                         ref={videoRef}
                         className="w-full h-full object-contain"
@@ -225,7 +225,7 @@ export default function VideoPlayer({ videoId, playbackUrl, onClose }: VideoPlay
                 </div>
 
                 {/* Right Side: Embed Code Snippets */}
-                <div className="xl:col-span-2 flex flex-col glass-card rounded-3xl p-8 border border-white/5 space-y-6 bg-white/[0.02]">
+                <div className="xl:col-span-2 flex flex-col ws-card rounded-3xl p-8 border border-white/5 space-y-6 bg-white/[0.02]">
                     <div className="space-y-1">
                         <div className="flex items-center gap-3 text-white">
                             <Code2 size={24} className="text-blue-400" />
