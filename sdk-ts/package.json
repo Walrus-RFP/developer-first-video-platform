@@ -1,5 +1,5 @@
 {
-  "name": "@walrus-video/sdk",
+  "name": "@walstream/sdk",
   "version": "1.0.0",
   "description": "TypeScript/JavaScript SDK for the Walrus developer-first video platform",
   "main": "dist/index.js",

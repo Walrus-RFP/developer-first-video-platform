@@ -1,5 +1,5 @@
 # RFP Compliance & Fulfillment Report
-**Walrus Video Infrastructure Platform — Developer-First Video Infrastructure and Tooling**
+**WalStream — Developer-First Video Infrastructure and Tooling**
 
 ---
 
@@ -98,8 +98,8 @@ Deployed on Sui testnet. `is_authorized` is called read-only via `devInspectTran
 
 **Python SDK** (`utils/sdk.py`):
 ```python
-from utils.sdk import WalrusVideo
-sdk = WalrusVideo(api_key="cv_...")
+from utils.sdk import WalStream
+sdk = WalStream(api_key="cv_...")
 video_id = sdk.upload_video("clip.mp4", title="Demo", on_progress=lambda u,t: print(f"{u}/{t}"))
 url = sdk.get_playback_url(video_id)
 sdk.register_webhook("https://app.example.com/hooks", ["upload.completed"])
@@ -107,8 +107,8 @@ sdk.register_webhook("https://app.example.com/hooks", ["upload.completed"])
 
 **TypeScript/JavaScript SDK** (`sdk-ts/`):
 ```typescript
-import { WalrusVideo } from '@walrus-video/sdk';
-const sdk = new WalrusVideo({ apiKey: 'cv_...', apiBase: 'https://api.yourplatform.com' });
+import { WalStream } from '@walstream/sdk';
+const sdk = new WalStream({ apiKey: 'cv_...', apiBase: 'https://api.yourplatform.com' });
 const videoId = await sdk.uploadVideo(file, { title: 'Demo', onProgress: (u,t) => ... });
 const { iframe_html } = await sdk.getEmbed(videoId);
 ```

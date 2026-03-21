@@ -1,5 +1,5 @@
 /**
- * Mysten Seal integration for the Walrus Video Platform.
+ * Mysten Seal integration for WalStream.
  *
  * Seal provides threshold key management: the AES-GCM encryption key
  * for private videos is Seal-encrypted by the owner and stored on Walrus.

@@ -145,7 +145,7 @@ def _deliver(webhook: dict, event: str, payload: dict):
         try:
             req = urllib.request.Request(webhook["url"], data=body, method="POST")
             req.add_header("Content-Type", "application/json")
-            req.add_header("User-Agent", "WalrusVideoWebhook/1.0")
+            req.add_header("User-Agent", "WalStream-Webhook/1.0")
             req.add_header("X-Webhook-Event", event)
             req.add_header("X-Webhook-Signature", f"sha256={signature}")
             req.add_header("X-Webhook-Attempt", str(attempt + 1))

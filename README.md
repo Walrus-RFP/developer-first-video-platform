@@ -1,4 +1,4 @@
-# Walrus Platform: Developer-First Video Infrastructure
+# WalStream: Developer-First Video Infrastructure
 
 A decentralized, developer-first video platform built on **Sui** and the **Walrus** decentralized storage network. It provides a complete end-to-end pipeline for uploading, processing (HLS), storing, and streaming videos with on-chain access control.
 
@@ -82,9 +82,9 @@ npm run build
 ```
 
 ```ts
-import { WalrusVideo } from '@walrus-video/sdk';
+import { WalStream } from '@walstream/sdk';
 
-const sdk = new WalrusVideo({
+const sdk = new WalStream({
   apiKey: 'cv_your_api_key_here',
   apiBase: 'http://localhost:8000',
 });
@@ -103,7 +103,7 @@ const playlistUrl = await sdk.getPlaybackUrl(videoId);
 const { iframe_html } = await sdk.getEmbed(videoId);
 
 // Verify incoming webhook signatures
-const valid = await WalrusVideo.verifyWebhookSignature(rawBody, sigHeader, secret);
+const valid = await WalStream.verifyWebhookSignature(rawBody, sigHeader, secret);
 ```
 
 ---
@@ -114,10 +114,10 @@ We provide a specialized SDK (`utils/sdk.py`) to make interacting with the platf
 
 ### Initialization
 ```python
-from utils.sdk import WalrusVideo
+from utils.sdk import WalStream
 
 # Initialize with your API Key
-sdk = WalrusVideo(api_key="cv_your_api_key_here")
+sdk = WalStream(api_key="cv_your_api_key_here")
 ```
 
 ### Video Management

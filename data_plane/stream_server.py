@@ -20,7 +20,7 @@ import urllib.error
 CONTROL_PLANE_URL = os.environ.get("CONTROL_PLANE_URL", "http://127.0.0.1:8000")
 
 app = FastAPI(
-    title="Walrus Video Platform — Data Plane",
+    title="WalStream — Data Plane",
     description=(
         "Chunk upload ingestion, HLS playlist and segment serving, "
         "HMAC-signed URL verification, Walrus blob retrieval with "
@@ -76,7 +76,7 @@ def embed_player(video_id: str, playlist: str = None):
         try:
             url = f"{CONTROL_PLANE_URL}/v1/playback-url/{video_id}"
             req = urllib.request.Request(url, method="GET")
-            req.add_header("User-Agent", "WalrusDataPlane/1.0")
+            req.add_header("User-Agent", "WalStream-DataPlane/1.0")
             with urllib.request.urlopen(req, timeout=5) as resp:
                 data = json.loads(resp.read())
             playlist = data.get("playlist", "")
@@ -209,7 +209,7 @@ def serve_hls_file(video_id: str, file_path: str, request: Request):
             logger.info("Fetching HLS manifest from control plane",
                         extra={"video_id": video_id, "url": manifest_url})
             req = urllib.request.Request(manifest_url, method="GET")
-            req.add_header("User-Agent", "WalrusDataPlane/1.0")
+            req.add_header("User-Agent", "WalStream-DataPlane/1.0")
             with urllib.request.urlopen(req, timeout=10) as response:
                 manifest = json.loads(response.read().decode("utf-8"))
 

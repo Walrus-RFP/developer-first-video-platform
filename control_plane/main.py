@@ -18,7 +18,7 @@ logger.info("Control plane main loaded")
 from control_plane.auth import get_current_user, api_key_header
 
 app = FastAPI(
-    title="Walrus Video Platform — Control Plane",
+    title="WalStream — Control Plane",
     description=(
         "Upload sessions, video metadata, API key management, webhooks, "
         "on-chain access grant queries, subscription policies, Seal policy linking, "
@@ -187,7 +187,7 @@ def list_access_grants(video_id: str, owner: str = Depends(get_current_user)):
     try:
         url = f"{_AUTH_PROXY}/grants?video_id={video_id}"
         req = _ureq.Request(url, method="GET")
-        req.add_header("User-Agent", "WalrusControlPlane/1.0")
+        req.add_header("User-Agent", "WalStream-ControlPlane/1.0")
         with _ureq.urlopen(req, timeout=5) as resp:
             import json as _json
             return _json.loads(resp.read())
@@ -215,7 +215,7 @@ def get_subscription_policy(video_id: str):
     try:
         url = f"{_AUTH_PROXY}/subscription-policy?video_id={video_id}"
         req = _ureq.Request(url, method="GET")
-        req.add_header("User-Agent", "WalrusControlPlane/1.0")
+        req.add_header("User-Agent", "WalStream-ControlPlane/1.0")
         with _ureq.urlopen(req, timeout=5) as resp:
             import json as _json
             return _json.loads(resp.read())
@@ -304,7 +304,7 @@ def get_seal_policy(video_id: str):
     try:
         url = f"{_AUTH_PROXY}/seal-policy?video_id={video_id}"
         req = _ureq.Request(url, method="GET")
-        req.add_header("User-Agent", "WalrusControlPlane/1.0")
+        req.add_header("User-Agent", "WalStream-ControlPlane/1.0")
         with _ureq.urlopen(req, timeout=5) as resp:
             import json as _json
             return _json.loads(resp.read())

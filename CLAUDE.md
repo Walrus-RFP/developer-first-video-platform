@@ -101,7 +101,7 @@ Developer-first video platform on Sui + Walrus. Clear split between control (met
 - `signing.py` — HMAC-SHA256 signed URLs; encryption key embedded in signature for stateless decryption
 - `crypto.py` — AES-GCM-256; nonce prepended to ciphertext
 - `sui.py` — HTTP client to sui-auth-proxy; returns `False` safely when contracts not deployed
-- `sdk.py` — `WalrusVideo` class; supports resumable chunked upload with 600s poll timeout
+- `sdk.py` — `WalStream` class; supports resumable chunked upload with 600s poll timeout
 
 ### Environment Variables
 

@@ -1,9 +1,9 @@
 import os
 import time
-from utils.sdk import WalrusVideo
+from utils.sdk import WalStream
 
 def main():
-    print("Testing WalrusVideo SDK...")
+    print("Testing WalStream SDK...")
     
     # 1. Generate an API Key (in prod, this is done via dashboard/admin api)
     import requests
@@ -21,7 +21,7 @@ def main():
     print(f"Generated API Key: {api_key}")
 
     # 2. Initialize SDK
-    sdk = WalrusVideo(api_key=api_key, api_base="http://localhost:8000")
+    sdk = WalStream(api_key=api_key, api_base="http://localhost:8000")
     sdk.data_plane = "http://localhost:8001"
 
     # 3. Complete Upload

@@ -6,7 +6,7 @@ from typing import List, Optional, Dict, Any
 from utils.logger import logger
 
 
-class WalrusVideo:
+class WalStream:
     """
     Developer-first SDK for the decentralized video platform.
     Enables one-line uploads, resumable chunked transfers, and playback.
@@ -276,7 +276,7 @@ class WalrusVideo:
         Usage in your receiver:
             raw_body = request.body()
             sig      = request.headers["X-Webhook-Signature"]
-            valid    = WalrusVideo.verify_webhook_signature(raw_body, sig, YOUR_SIGNING_SECRET)
+            valid    = WalStream.verify_webhook_signature(raw_body, sig, YOUR_SIGNING_SECRET)
             if not valid:
                 return 401
 
@@ -451,6 +451,6 @@ class WalrusVideo:
 
 
 # ── Example usage ─────────────────────────────────────────────────────────────
-# sdk = WalrusVideo(api_key="cv_...", api_base="http://localhost:8000")
+# sdk = WalStream(api_key="cv_...", api_base="http://localhost:8000")
 # video_id = sdk.upload_video("demo.mp4", title="My First Video")
 # url = sdk.get_playback_url(video_id, user_address="0xabc...")

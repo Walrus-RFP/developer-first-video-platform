@@ -1,5 +1,5 @@
 # Security Audit Scope
-**Walrus Video Infrastructure Platform**
+**WalStream**
 
 This document defines the scope for a third-party security audit prior to mainnet deployment.
 

@@ -1,20 +1,20 @@
 /**
- * WalrusVideo TypeScript/JavaScript SDK
+ * WalStream TypeScript/JavaScript SDK
  *
  * Developer-first SDK for the decentralized video platform.
  * Supports Node.js and browser environments.
  *
  * @example
  * ```ts
- * import { WalrusVideo } from '@walrus-video/sdk';
+ * import { WalStream } from '@walstream/sdk';
  *
- * const sdk = new WalrusVideo({ apiKey: 'cv_...', apiBase: 'https://api.yourplatform.com' });
+ * const sdk = new WalStream({ apiKey: 'cv_...', apiBase: 'https://api.yourplatform.com' });
  * const videoId = await sdk.uploadVideo('./demo.mp4', { title: 'My First Video' });
  * const url = await sdk.getPlaybackUrl(videoId);
  * ```
  */
 
-export interface WalrusVideoOptions {
+export interface WalStreamOptions {
   /** API key (cv_...) */
   apiKey: string;
   /** Control Plane base URL. Default: http://localhost:8000 */
@@ -140,12 +140,12 @@ async function apiFetch<T>(
 
 // ── SDK class ─────────────────────────────────────────────────────────────────
 
-export class WalrusVideo {
+export class WalStream {
   private readonly apiKey: string;
   private readonly apiBase: string;
   private readonly dataPlane: string;
 
-  constructor(options: WalrusVideoOptions) {
+  constructor(options: WalStreamOptions) {
     this.apiKey = options.apiKey;
     this.apiBase = (options.apiBase ?? "http://localhost:8000").replace(/\/$/, "");
     this.dataPlane = (options.dataPlane ?? "http://localhost:8001").replace(/\/$/, "");
@@ -379,7 +379,7 @@ export class WalrusVideo {
    *
    * @example
    * ```ts
-   * const isValid = await WalrusVideo.verifyWebhookSignature(rawBody, sigHeader, secret);
+   * const isValid = await WalStream.verifyWebhookSignature(rawBody, sigHeader, secret);
    * if (!isValid) return res.status(401).send('Unauthorized');
    * ```
    */
@@ -584,4 +584,4 @@ export class WalrusVideo {
   }
 }
 
-export default WalrusVideo;
+export default WalStream;

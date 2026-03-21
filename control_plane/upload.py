@@ -252,7 +252,7 @@ def merge_chunks(session_id: str):
     logger.info("Fetching manifest from %s", manifest_url, extra={"session_id": session_id})
     try:
         req = urllib.request.Request(manifest_url, method="GET")
-        req.add_header("User-Agent", "WalrusControlPlane/1.0")
+        req.add_header("User-Agent", "WalStream-ControlPlane/1.0")
         with urllib.request.urlopen(req, timeout=10) as response:
             manifest = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
@@ -844,7 +844,7 @@ def get_thumbnail(video_id: str):
     try:
         blob_url = f"{AGGREGATOR}/v1/blobs/{blob_id}"
         req = urllib.request.Request(blob_url, method="GET")
-        req.add_header("User-Agent", "WalrusVideoSDK/1.0")
+        req.add_header("User-Agent", "WalStream/1.0")
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = resp.read()
         return Response(content=data, media_type="image/jpeg")

@@ -50,7 +50,7 @@ def store_blob(data: bytes, epochs: int = 5) -> str:
     """
     url = f"{PUBLISHER_URL}/v1/blobs?epochs={epochs}"
     req = urllib.request.Request(url, data=data, method="PUT")
-    req.add_header("User-Agent", "WalrusVideoSDK/1.0")
+    req.add_header("User-Agent", "WalStream/1.0")
 
     try:
         with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as response:
@@ -96,7 +96,7 @@ def read_blob(blob_id: str) -> bytes:
     """
     url = f"{AGGREGATOR_URL}/v1/blobs/{blob_id}"
     req = urllib.request.Request(url, method="GET")
-    req.add_header("User-Agent", "WalrusVideoSDK/1.0")
+    req.add_header("User-Agent", "WalStream/1.0")
 
     max_retries = 30
     initial_backoff = 2

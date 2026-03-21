@@ -37,7 +37,7 @@ def is_authorized(video_id: str, user_address: str) -> bool:
 
     try:
         req = urllib.request.Request(url, method="GET")
-        req.add_header("User-Agent", "WalrusControlPlane/1.0")
+        req.add_header("User-Agent", "WalStream-ControlPlane/1.0")
         with urllib.request.urlopen(req, timeout=10) as resp:
             body = json.loads(resp.read().decode("utf-8"))
             authorized = bool(body.get("authorized", False))

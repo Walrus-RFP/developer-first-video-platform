@@ -1,8 +1,8 @@
 import sys
-from utils.sdk import WalrusVideo
+from utils.sdk import WalStream
 
 def test_invalid():
-    sdk = WalrusVideo(api_key="cv_kZ189rWJ6tlXx39MdLup7vAeIpLUlkPRTdGhyuqcWsE", api_base="http://control-plane:8000")
+    sdk = WalStream(api_key="cv_kZ189rWJ6tlXx39MdLup7vAeIpLUlkPRTdGhyuqcWsE", api_base="http://control-plane:8000")
     sdk.data_plane = "http://data-plane:8001"
     try:
         sdk.upload_video("invalid.txt")
