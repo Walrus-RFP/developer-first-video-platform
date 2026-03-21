@@ -22,8 +22,9 @@ This document serves as the final audit checklist to verify that all requirement
 | RFP Requirement | Implementation Detail | Location |
 | :--- | :--- | :--- |
 | **Clean APIs** | Stateless REST endpoints for sessions, uploads, and playback. | `control_plane/main.py` |
-| **Developer SDK** | "1-Line" Python SDK for easy backend-to-backend integration. | `utils/sdk.py` |
-| **Access Control & Privacy** | AES-GCM Seal-based encryption for private blobs + Sui Move gating. | `utils/crypto.py` |
+| **Developer SDK (Python)** | "1-Line" Python SDK for backend integration. | `utils/sdk.py` |
+| **Developer SDK (TypeScript/JS)** | Full-featured TS/JS SDK for frontend and Node.js integrators. | `sdk-ts/src/index.ts` |
+| **Access Control & Privacy** | AES-GCM-256 per-video encryption. Mysten Seal threshold key distribution: owner Seal-encrypts the AES key client-side; server forgets plaintext key; viewers recover key via `seal_approve` on-chain check + Seal node key shares. | `utils/crypto.py`, `utils/signing.py`, `frontend/src/lib/seal.ts` |
 | **Observability & Analytics** | Database-backed ingress/egress logs with bandwidth tracking. | `control_plane/db.py` |
 
 ---
@@ -45,5 +46,8 @@ This document serves as the final audit checklist to verify that all requirement
 - **Education/Training**: Verified via ABR (low-bandwidth support).
 - **Media Archives**: Verified via Stateless Data Plane (total reliance on Walrus).
 
-**Status: 100% COMPLIANT**
-*Verified by the Antigravity Technical Audit — Feb 2026*
+**Status: COMPLIANT — All deliverables present.**
+
+**Known limitations:**
+- Live streaming (RTMP ingest) is out of scope for this VoD-focused RFP.
+- Seal integration requires deploying smart contracts and configuring `NEXT_PUBLIC_SUI_*` env vars. AES-GCM fallback remains active for videos where Seal setup has not been completed.

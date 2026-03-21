@@ -6,12 +6,14 @@ Supported events:
   - video.registered   — fired when a video is registered on-chain
   - playback.requested — fired when a signed playback URL is generated
 
-Developers register webhook URLs via the API and receive POST callbacks
-with a JSON payload describing the event.
+Webhook deliveries include an X-Webhook-Signature header (HMAC-SHA256)
+so receivers can verify the payload came from this platform.
 """
 
+import hashlib
+import hmac
 import json
-from utils.logger import logger
+import os
 import uuid
 import urllib.request
 import urllib.error
@@ -20,13 +22,16 @@ from threading import Thread
 from typing import Optional, List
 from sqlalchemy import text
 
-# Import the SQLAlchemy engine from db.py
 from control_plane.db import engine
+from utils.logger import logger
+
+WEBHOOK_SECRET = os.environ.get("SIGNING_SECRET", "super_secret_key_change_me")
 
 
-# ---------------------------------------------------
+# ──────────────────────────────────────────────────────────────
 # DB SCHEMA
-# ---------------------------------------------------
+# ──────────────────────────────────────────────────────────────
+
 def init_webhooks_table():
     with engine.begin() as conn:
         conn.execute(text("""
@@ -52,9 +57,10 @@ def init_webhooks_table():
         """))
 
 
-# ---------------------------------------------------
+# ──────────────────────────────────────────────────────────────
 # CRUD
-# ---------------------------------------------------
+# ──────────────────────────────────────────────────────────────
+
 def register_webhook(url: str, events: List[str], owner: Optional[str] = None) -> dict:
     wh_id = str(uuid.uuid4())
     with engine.begin() as conn:
@@ -66,7 +72,7 @@ def register_webhook(url: str, events: List[str], owner: Optional[str] = None) -
             "url": url,
             "events": json.dumps(events),
             "owner": owner,
-            "created_at": datetime.utcnow().isoformat()
+            "created_at": datetime.utcnow().isoformat(),
         })
     return {"id": wh_id, "url": url, "events": events, "active": True}
 
@@ -80,8 +86,7 @@ def list_webhooks(owner: Optional[str] = None) -> list:
             """), {"owner": owner}).mappings().fetchall()
         else:
             rows = conn.execute(text("""
-                SELECT id, url, events, owner, active, created_at
-                FROM webhooks
+                SELECT id, url, events, owner, active, created_at FROM webhooks
             """)).mappings().fetchall()
 
     return [
@@ -91,7 +96,7 @@ def list_webhooks(owner: Optional[str] = None) -> list:
             "events": json.loads(r["events"]),
             "owner": r["owner"],
             "active": bool(r["active"]),
-            "created_at": r["created_at"]
+            "created_at": r["created_at"],
         }
         for r in rows
     ]
@@ -103,35 +108,66 @@ def delete_webhook(wh_id: str) -> bool:
         return res.rowcount > 0
 
 
-# ---------------------------------------------------
-# EVENT DISPATCH (async, fire-and-forget)
-# ---------------------------------------------------
+# ──────────────────────────────────────────────────────────────
+# EVENT DISPATCH
+# ──────────────────────────────────────────────────────────────
+
+def _sign_payload(body: bytes) -> str:
+    """Return an HMAC-SHA256 hex digest of the raw body."""
+    return hmac.new(WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()
+
+
 def _deliver(webhook: dict, event: str, payload: dict):
-    """Send a single webhook POST. Runs in a background thread."""
-    body = json.dumps({"event": event, "data": payload, "timestamp": datetime.utcnow().isoformat()}).encode()
+    """
+    Send a webhook POST with exponential backoff retries.
+    Schedule: immediate, 2s, 4s, 8s (4 attempts total).
+    4xx responses are not retried — they indicate a permanent client error.
+    """
+    import time as _time
+
+    body = json.dumps({
+        "event": event,
+        "data": payload,
+        "timestamp": datetime.utcnow().isoformat(),
+    }).encode()
+
+    signature = _sign_payload(body)
     log_id = str(uuid.uuid4())
     status_code = None
     error = None
 
-    try:
-        req = urllib.request.Request(webhook["url"], data=body, method="POST")
-        req.add_header("Content-Type", "application/json")
-        req.add_header("User-Agent", "WalrusVideoWebhook/1.0")
-        req.add_header("X-Webhook-Event", event)
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            status_code = resp.status
-    except urllib.error.HTTPError as e:
-        status_code = e.code
-        error = str(e)
-    except Exception as e:
-        error = str(e)
+    MAX_ATTEMPTS = 4
+    BACKOFF = [0, 2, 4, 8]
 
-    # Log the delivery attempt
+    for attempt in range(MAX_ATTEMPTS):
+        if BACKOFF[attempt] > 0:
+            _time.sleep(BACKOFF[attempt])
+        try:
+            req = urllib.request.Request(webhook["url"], data=body, method="POST")
+            req.add_header("Content-Type", "application/json")
+            req.add_header("User-Agent", "WalrusVideoWebhook/1.0")
+            req.add_header("X-Webhook-Event", event)
+            req.add_header("X-Webhook-Signature", f"sha256={signature}")
+            req.add_header("X-Webhook-Attempt", str(attempt + 1))
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                status_code = resp.status
+            error = None
+            break  # success
+        except urllib.error.HTTPError as e:
+            status_code = e.code
+            error = str(e)
+            if 400 <= e.code < 500:
+                break  # 4xx won't self-heal — stop retrying
+        except Exception as e:
+            error = str(e)
+
     try:
         with engine.begin() as conn:
             conn.execute(text("""
-                INSERT INTO webhook_logs (id, webhook_id, event, payload, status_code, error, created_at)
-                VALUES (:id, :webhook_id, :event, :payload, :status_code, :error, :created_at)
+                INSERT INTO webhook_logs
+                    (id, webhook_id, event, payload, status_code, error, created_at)
+                VALUES
+                    (:id, :webhook_id, :event, :payload, :status_code, :error, :created_at)
             """), {
                 "id": log_id,
                 "webhook_id": webhook["id"],
@@ -139,21 +175,29 @@ def _deliver(webhook: dict, event: str, payload: dict):
                 "payload": json.dumps(payload),
                 "status_code": status_code,
                 "error": error,
-                "created_at": datetime.utcnow().isoformat()
+                "created_at": datetime.utcnow().isoformat(),
             })
     except Exception as e:
         logger.error("Failed to log webhook delivery: %s", e)
 
     if error:
-        logger.error("Failed to deliver %s to %s: %s", event, webhook['url'], error, extra={"event": event, "url": webhook['url']})
+        logger.error(
+            "Failed to deliver %s to %s: %s",
+            event, webhook["url"], error,
+            extra={"event": event, "url": webhook["url"]},
+        )
     else:
-        logger.info("Delivered %s to %s", event, webhook['url'], extra={"event": event, "url": webhook['url'], "status_code": status_code})
+        logger.info(
+            "Delivered %s to %s (HTTP %d)",
+            event, webhook["url"], status_code,
+            extra={"event": event, "url": webhook["url"], "status_code": status_code},
+        )
 
 
 def fire_event(event: str, payload: dict):
     """
-    Fire an event to all registered webhooks that are subscribed to it.
-    Delivery happens in background threads (non-blocking).
+    Fire an event to all subscribed webhooks.
+    Delivery is non-blocking (background daemon threads).
     """
     try:
         webhooks = list_webhooks()
@@ -161,7 +205,6 @@ def fire_event(event: str, payload: dict):
             if not wh["active"]:
                 continue
             if event in wh["events"] or "*" in wh["events"]:
-                thread = Thread(target=_deliver, args=(wh, event, payload), daemon=True)
-                thread.start()
+                Thread(target=_deliver, args=(wh, event, payload), daemon=True).start()
     except Exception as e:
         logger.error("Error dispatching webhook event: %s", e, extra={"event": event})

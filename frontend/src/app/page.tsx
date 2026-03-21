@@ -3,10 +3,11 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Play, Info, ArrowUpRight } from "lucide-react";
 import { useState, useEffect } from "react";
-import { useCurrentAccount } from "@mysten/dapp-kit";
+import { useCurrentAccount, useSuiClient, useSignPersonalMessage } from "@mysten/dapp-kit";
 import UploadModal from "@/components/UploadModal";
 import VideoPlayer from "@/components/VideoPlayer";
 import ApiKeysView from "@/components/ApiKeysView";
+import AccessControlView from "@/components/AccessControlView";
 import DashboardStats from "@/components/DashboardStats";
 
 const API_BASE = (process.env.NEXT_PUBLIC_CONTROL_PLANE_URL || "http://127.0.0.1:8000") + "/v1";
@@ -14,10 +15,12 @@ const API_BASE = (process.env.NEXT_PUBLIC_CONTROL_PLANE_URL || "http://127.0.0.1
 export default function Home() {
     const [videos, setVideos] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [viewType, setViewType] = useState<"all" | "mine" | "api_keys">("all");
+    const [viewType, setViewType] = useState<"all" | "mine" | "api_keys" | "access">("all");
     const [showUpload, setShowUpload] = useState(false);
     const [activePlayback, setActivePlayback] = useState<{ id: string, url: string } | null>(null);
     const account = useCurrentAccount();
+    const suiClient = useSuiClient();
+    const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
 
     const fetchVideos = async (type = viewType) => {
         console.log(`[Frontend] Fetching videos for ${type}...`);
@@ -43,13 +46,50 @@ export default function Home() {
 
     const handlePlay = async (videoId: string) => {
         try {
-            const url = account ? `${API_BASE}/playback-url/${videoId}?user_address=${account.address}` : `${API_BASE}/playback-url/${videoId}`;
+            const url = account
+                ? `${API_BASE}/playback-url/${videoId}?user_address=${account.address}`
+                : `${API_BASE}/playback-url/${videoId}`;
             const res = await fetch(url);
             if (!res.ok) {
                 if (res.status === 403) throw new Error("Permission denied. Ensure wallet holds access policy.");
                 throw new Error("Playback failed");
             }
             const data = await res.json();
+
+            // Seal-encrypted video: decrypt key via Mysten Seal SDK
+            if (data.needs_seal) {
+                if (!account) throw new Error("Connect your wallet to play this Seal-encrypted video.");
+                const { seal_key_blob_id } = data;
+
+                // Fetch the Seal-encrypted key blob from the data plane
+                const DATA_PLANE = (process.env.NEXT_PUBLIC_DATA_PLANE_URL || "http://127.0.0.1:8001");
+                const blobRes = await fetch(`${DATA_PLANE}/v1/seal-blob/${seal_key_blob_id}`);
+                if (!blobRes.ok) throw new Error("Failed to fetch Seal key blob");
+                const encryptedKeyBytes = new Uint8Array(await blobRes.arrayBuffer());
+
+                // Dynamically import Seal utilities
+                const { sealDecryptVideoKey } = await import("@/lib/seal");
+
+                // NOTE: suiClient and signPersonalMessage come from component-scope hooks.
+                // In production, consider passing these via React context if the component tree grows.
+                const sealKey = await sealDecryptVideoKey(
+                    suiClient,
+                    videoId,
+                    encryptedKeyBytes,
+                    account.address,
+                    signPersonalMessage,
+                );
+
+                // Re-request playback URL with decrypted key
+                const resolvedRes = await fetch(
+                    `${API_BASE}/playback-url/${videoId}?user_address=${account.address}&seal_key=${encodeURIComponent(sealKey)}`
+                );
+                if (!resolvedRes.ok) throw new Error("Failed to get resolved playback URL");
+                const resolvedData = await resolvedRes.json();
+                setActivePlayback({ id: videoId, url: resolvedData.playlist });
+                return;
+            }
+
             setActivePlayback({ id: videoId, url: data.playlist });
         } catch (err: any) {
             alert(err.message || "Failed to get playback authorization.");
@@ -112,14 +152,24 @@ export default function Home() {
                                 API Keys
                             </button>
                         )}
+                        {account && (
+                            <button
+                                onClick={() => setViewType("access")}
+                                className={`text-sm font-semibold tracking-widest uppercase transition-colors ${viewType === 'access' ? 'text-white' : 'text-muted hover:text-white/70'}`}
+                            >
+                                Access Control
+                            </button>
+                        )}
                     </div>
-                    {viewType !== 'api_keys' && (
+                    {viewType !== 'api_keys' && viewType !== 'access' && (
                         <span className="text-xs text-muted tracking-tight">{videos.length} videos available</span>
                     )}
                 </div>
 
                 {viewType === 'api_keys' && account ? (
                     <ApiKeysView address={account.address} />
+                ) : viewType === 'access' && account ? (
+                    <AccessControlView address={account.address} />
                 ) : viewType === 'mine' && !account ? (
                     <div className="py-20 text-center border border-dashed border-white/10 rounded-2xl glass-card">
                         <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -199,7 +249,7 @@ function VideoCard({ video, index, onClick }: { video: any, index: number, onCli
         >
             <div className="relative aspect-video glass-card rounded-2xl overflow-hidden group-hover:border-white/20 transition-all duration-500 bg-white/5">
                 <img
-                    src={`${process.env.NEXT_PUBLIC_CONTROL_PLANE_URL}/thumbnail/${video.video_id}`}
+                    src={`${process.env.NEXT_PUBLIC_CONTROL_PLANE_URL}/v1/thumbnail/${video.video_id}`}
                     alt={displayTitle}
                     className="absolute inset-0 w-full h-full object-cover"
                     onError={(e) => {

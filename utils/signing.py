@@ -1,8 +1,8 @@
 import hashlib
 import hmac
 import time
-import urllib.parse
 import os
+from typing import Optional
 from utils.logger import logger
 
 _DEFAULT_SECRET = "super_secret_key_change_me"
@@ -16,10 +16,10 @@ PUBLIC_DATA_PLANE_URL = os.environ.get("PUBLIC_DATA_PLANE_URL", DATA_PLANE_URL)
 # =====================================================
 # CREATE SIGNED URL
 # =====================================================
-def create_signed_url(video_id: str, file: str = "playlist.m3u8", expiry_seconds=3600, encryption_key: str = None):
+def create_signed_url(video_id: str, file: str = "playlist.m3u8", expiry_seconds: int = 3600, encryption_key: Optional[str] = None):
 
     exp = int(time.time()) + expiry_seconds
-    
+
     if encryption_key:
         message = f"{video_id}:{exp}:{encryption_key}".encode()
     else:
@@ -37,7 +37,7 @@ def create_signed_url(video_id: str, file: str = "playlist.m3u8", expiry_seconds
 # =====================================================
 # VERIFY SIGNED URL
 # =====================================================
-def verify_signed_url(video_id: str, params, file: str = "playlist.m3u8"):
+def verify_signed_url(video_id: str, params, file: str = "playlist.m3u8"):  # noqa: ARG001
 
     exp = params.get("exp")
     sig = params.get("sig")

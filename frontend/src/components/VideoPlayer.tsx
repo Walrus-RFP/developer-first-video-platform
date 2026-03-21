@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import Hls from "hls.js";
-import { Play, Pause, Volume2, Maximize, X, Copy, Check, Code2 } from "lucide-react";
+import { Play, Pause, Volume2, VolumeX, Maximize, X, Copy, Check, Code2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface VideoPlayerProps {
@@ -13,10 +13,27 @@ interface VideoPlayerProps {
 
 export default function VideoPlayer({ videoId, playbackUrl, onClose }: VideoPlayerProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
+    const progressRef = useRef<HTMLDivElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [progress, setProgress] = useState(0);
+    const [volume, setVolume] = useState(1);
+    const [isMuted, setIsMuted] = useState(false);
+    const [currentTime, setCurrentTime] = useState(0);
+    const [duration, setDuration] = useState(0);
     const [tab, setTab] = useState<"iframe" | "react" | "hlsjs">("iframe");
     const [copied, setCopied] = useState(false);
+    const [embedUrl, setEmbedUrl] = useState<string | null>(null);
+
+    const CONTROL_PLANE = process.env.NEXT_PUBLIC_CONTROL_PLANE_URL || "http://localhost:8000";
+
+    // Fetch the stable embed URL from control plane (not the expiring signed URL)
+    useEffect(() => {
+        fetch(`${CONTROL_PLANE}/v1/videos/${videoId}/embed`)
+            .then(r => r.ok ? r.json() : null)
+            .then(data => { if (data?.embed_url) setEmbedUrl(data.embed_url); })
+            .catch(() => {});
+    }, [videoId, CONTROL_PLANE]);
 
     useEffect(() => {
         let isMounted = true;
@@ -30,62 +47,96 @@ export default function VideoPlayer({ videoId, playbackUrl, onClose }: VideoPlay
                     if (isMounted) setIsPlaying(true);
                 }
             } catch (err: any) {
-                if (err.name !== "AbortError") {
-                    console.error("Playback failed", err);
-                }
+                if (err.name !== "AbortError") console.error("Playback failed", err);
             }
         };
 
         if (Hls.isSupported()) {
-            const hls = new Hls({
-                xhrSetup: (xhr) => {
-                    xhr.withCredentials = false;
-                }
-            });
+            const hls = new Hls({ xhrSetup: (xhr) => { xhr.withCredentials = false; } });
             hls.loadSource(playbackUrl);
             hls.attachMedia(video);
             hls.on(Hls.Events.MANIFEST_PARSED, playVideo);
-
-            hls.on(Hls.Events.ERROR, (event, data) => {
-                if (data.fatal) {
-                    console.error("HLS Fatal Error:", data.type, data.details, data.error?.message);
-                }
+            hls.on(Hls.Events.ERROR, (_, data) => {
+                if (data.fatal) console.error("HLS Fatal Error:", data.type, data.details);
             });
-
-            return () => {
-                isMounted = false;
-                hls.destroy();
-            };
+            return () => { isMounted = false; hls.destroy(); };
         } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
             video.src = playbackUrl;
             video.addEventListener("loadedmetadata", playVideo);
-            return () => {
-                isMounted = false;
-            };
+            return () => { isMounted = false; };
         }
     }, [playbackUrl]);
 
     const togglePlay = () => {
-        if (videoRef.current) {
-            if (isPlaying) videoRef.current.pause();
-            else videoRef.current.play();
-            setIsPlaying(!isPlaying);
-        }
+        if (!videoRef.current) return;
+        if (isPlaying) videoRef.current.pause();
+        else videoRef.current.play();
+        setIsPlaying(!isPlaying);
     };
 
     const handleTimeUpdate = () => {
-        if (videoRef.current) {
-            const p = (videoRef.current.currentTime / videoRef.current.duration) * 100;
-            setProgress(p);
+        const video = videoRef.current;
+        if (!video) return;
+        const dur = video.duration || 0;
+        const cur = video.currentTime || 0;
+        setCurrentTime(cur);
+        setDuration(dur);
+        setProgress(dur > 0 ? (cur / dur) * 100 : 0);
+    };
+
+    const handleLoadedMetadata = () => {
+        if (videoRef.current) setDuration(videoRef.current.duration || 0);
+    };
+
+    const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+        if (!progressRef.current || !videoRef.current) return;
+        const rect = progressRef.current.getBoundingClientRect();
+        const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        videoRef.current.currentTime = pct * (videoRef.current.duration || 0);
+        setProgress(pct * 100);
+    }, []);
+
+    const handleVolumeClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+        if (!videoRef.current) return;
+        const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+        const newVol = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        videoRef.current.volume = newVol;
+        videoRef.current.muted = newVol === 0;
+        setVolume(newVol);
+        setIsMuted(newVol === 0);
+    }, []);
+
+    const toggleMute = () => {
+        if (!videoRef.current) return;
+        const newMuted = !isMuted;
+        videoRef.current.muted = newMuted;
+        setIsMuted(newMuted);
+    };
+
+    const handleFullscreen = () => {
+        if (!containerRef.current) return;
+        if (!document.fullscreenElement) {
+            containerRef.current.requestFullscreen().catch(console.error);
+        } else {
+            document.exitFullscreen().catch(console.error);
         }
     };
 
+    const formatTime = (s: number) => {
+        if (!isFinite(s) || isNaN(s)) return "0:00";
+        const m = Math.floor(s / 60);
+        const sec = Math.floor(s % 60);
+        return `${m}:${sec.toString().padStart(2, "0")}`;
+    };
+
+    const effectiveEmbedUrl = embedUrl || playbackUrl;
+
     const getSnippet = () => {
         if (tab === "iframe") {
-            return `<iframe\n  src="${playbackUrl}"\n  style="width: 100%; aspect-ratio: 16/9; border: none;"\n  allow="autoplay; fullscreen; encrypted-media"\n  allowfullscreen\n></iframe>`;
+            return `<iframe\n  src="${effectiveEmbedUrl}"\n  style="width: 100%; aspect-ratio: 16/9; border: none;"\n  allow="autoplay; fullscreen; encrypted-media"\n  allowfullscreen\n></iframe>`;
         }
         if (tab === "react") {
-            return `import React from 'react';\n\nexport default function Video() {\n  return (\n    <video \n      src="${playbackUrl}"\n      controls \n      autoPlay \n      className="w-full aspect-video"\n    />\n  );\n}`;
+            return `import { useEffect, useRef } from 'react';\nimport Hls from 'hls.js';\n\nexport default function Video() {\n  const ref = useRef(null);\n  useEffect(() => {\n    if (Hls.isSupported()) {\n      const hls = new Hls();\n      hls.loadSource('${playbackUrl}');\n      hls.attachMedia(ref.current);\n    }\n  }, []);\n  return <video ref={ref} controls className="w-full aspect-video" />;\n}`;
         }
         if (tab === "hlsjs") {
             return `import Hls from 'hls.js';\n\nconst video = document.getElementById('video');\nif (Hls.isSupported()) {\n  const hls = new Hls();\n  hls.loadSource('${playbackUrl}');\n  hls.attachMedia(video);\n  hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());\n}`;
@@ -110,38 +161,63 @@ export default function VideoPlayer({ videoId, playbackUrl, onClose }: VideoPlay
 
             <div className="w-full max-w-7xl grid grid-cols-1 xl:grid-cols-5 gap-8 my-auto">
                 {/* Left Side: Video Player */}
-                <div className="xl:col-span-3 aspect-video relative group glass-card rounded-3xl overflow-hidden shadow-2xl bg-black">
+                <div ref={containerRef} className="xl:col-span-3 aspect-video relative group glass-card rounded-3xl overflow-hidden shadow-2xl bg-black">
                     <video
                         ref={videoRef}
                         className="w-full h-full object-contain"
                         onTimeUpdate={handleTimeUpdate}
+                        onLoadedMetadata={handleLoadedMetadata}
                         onClick={togglePlay}
                     />
 
-                    {/* Custom Minimal Controls */}
-                    <div className="absolute inset-x-0 bottom-0 p-8 pt-20 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500">
-                        <div className="space-y-6">
-                            <div className="h-1 w-full bg-white/10 rounded-full overflow-hidden cursor-pointer group/progress">
+                    {/* Controls */}
+                    <div className="absolute inset-x-0 bottom-0 p-6 pt-16 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500">
+                        <div className="space-y-4">
+                            {/* Seekable progress bar */}
+                            <div
+                                ref={progressRef}
+                                className="h-1 w-full bg-white/10 rounded-full cursor-pointer group/bar"
+                                onClick={handleProgressClick}
+                            >
                                 <div
-                                    className="h-full bg-white transition-all duration-150"
+                                    className="h-full bg-white rounded-full pointer-events-none group-hover/bar:bg-blue-400 transition-colors"
                                     style={{ width: `${progress}%` }}
                                 />
                             </div>
 
                             <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-8">
-                                    <button onClick={togglePlay} className="hover:scale-110 transition-transform">
-                                        {isPlaying ? <Pause fill="white" size={24} /> : <Play fill="white" size={24} />}
+                                <div className="flex items-center gap-5">
+                                    <button onClick={togglePlay} className="hover:scale-110 transition-transform text-white">
+                                        {isPlaying ? <Pause fill="white" size={20} /> : <Play fill="white" size={20} />}
                                     </button>
-                                    <div className="flex items-center gap-4 opacity-40 hover:opacity-100 transition-opacity">
-                                        <Volume2 size={20} />
-                                        <div className="w-20 h-1 bg-white/20 rounded-full" />
+
+                                    {/* Volume */}
+                                    <div className="flex items-center gap-2">
+                                        <button onClick={toggleMute} className="text-white/70 hover:text-white transition-colors">
+                                            {isMuted || volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
+                                        </button>
+                                        <div
+                                            className="w-16 h-1 bg-white/20 rounded-full cursor-pointer relative"
+                                            onClick={handleVolumeClick}
+                                        >
+                                            <div
+                                                className="h-full bg-white rounded-full pointer-events-none"
+                                                style={{ width: `${isMuted ? 0 : volume * 100}%` }}
+                                            />
+                                        </div>
                                     </div>
+
+                                    {/* Time display */}
+                                    <span className="text-xs font-mono text-white/50 tabular-nums">
+                                        {formatTime(currentTime)} / {formatTime(duration)}
+                                    </span>
                                 </div>
 
-                                <div className="flex items-center gap-6 opacity-40">
-                                    <span className="text-xs font-mono tracking-tighter">1080P / ABR</span>
-                                    <Maximize size={20} className="hover:text-white transition-colors cursor-pointer" />
+                                <div className="flex items-center gap-4">
+                                    <span className="text-xs font-mono tracking-tighter text-white/30">ABR</span>
+                                    <button onClick={handleFullscreen} className="text-white/60 hover:text-white transition-colors">
+                                        <Maximize size={18} />
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -160,27 +236,16 @@ export default function VideoPlayer({ videoId, playbackUrl, onClose }: VideoPlay
 
                     {/* Tabs */}
                     <div className="flex gap-6 border-b border-white/10 pb-0 text-xs font-semibold tracking-widest uppercase">
-                        <button
-                            className={`pb-3 px-1 transition-colors relative ${tab === 'iframe' ? 'text-white' : 'text-muted hover:text-white/70'}`}
-                            onClick={() => setTab('iframe')}
-                        >
-                            IFrame
-                            {tab === 'iframe' && <motion.div layoutId="underline" className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-400" />}
-                        </button>
-                        <button
-                            className={`pb-3 px-1 transition-colors relative ${tab === 'react' ? 'text-white' : 'text-muted hover:text-white/70'}`}
-                            onClick={() => setTab('react')}
-                        >
-                            React Component
-                            {tab === 'react' && <motion.div layoutId="underline" className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-400" />}
-                        </button>
-                        <button
-                            className={`pb-3 px-1 transition-colors relative ${tab === 'hlsjs' ? 'text-white' : 'text-muted hover:text-white/70'}`}
-                            onClick={() => setTab('hlsjs')}
-                        >
-                            Core HLS.js
-                            {tab === 'hlsjs' && <motion.div layoutId="underline" className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-400" />}
-                        </button>
+                        {(["iframe", "react", "hlsjs"] as const).map((t) => (
+                            <button
+                                key={t}
+                                className={`pb-3 px-1 transition-colors relative ${tab === t ? 'text-white' : 'text-muted hover:text-white/70'}`}
+                                onClick={() => setTab(t)}
+                            >
+                                {t === "iframe" ? "IFrame" : t === "react" ? "React" : "HLS.js"}
+                                {tab === t && <motion.div layoutId="underline" className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-400" />}
+                            </button>
+                        ))}
                     </div>
 
                     {/* Code Block */}
@@ -199,7 +264,7 @@ export default function VideoPlayer({ videoId, playbackUrl, onClose }: VideoPlay
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -5 }}
                                 transition={{ duration: 0.15 }}
-                                className="pt-8 whitespace-pre-wrap word-break-all"
+                                className="pt-8 whitespace-pre-wrap break-all"
                             >
                                 <code className="text-[13px] leading-relaxed block text-blue-100/70">
                                     {getSnippet()}

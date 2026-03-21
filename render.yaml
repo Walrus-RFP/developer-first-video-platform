@@ -34,7 +34,7 @@ services:
     buildCommand: cd frontend && npm install && npm run build
     startCommand: cd frontend && npm run start
     envVars:
-      - key: NEXT_PUBLIC_CONTROL_PLANE
+      - key: NEXT_PUBLIC_CONTROL_PLANE_URL
         value: https://walrus-control-plane.onrender.com
-      - key: NEXT_PUBLIC_DATA_PLANE
+      - key: NEXT_PUBLIC_DATA_PLANE_URL
         value: https://walrus-data-plane.onrender.com

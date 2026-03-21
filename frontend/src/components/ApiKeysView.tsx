@@ -22,6 +22,7 @@ export default function ApiKeysView({ address }: ApiKeysViewProps) {
     const [copiedKey, setCopiedKey] = useState<string | null>(null);
     const [newKeyName, setNewKeyName] = useState("");
     const [showNewForm, setShowNewForm] = useState(false);
+    const [revokingKey, setRevokingKey] = useState<string | null>(null);
 
     useEffect(() => {
         fetchKeys();
@@ -67,6 +68,26 @@ export default function ApiKeysView({ address }: ApiKeysViewProps) {
         navigator.clipboard.writeText(text);
         setCopiedKey(text);
         setTimeout(() => setCopiedKey(null), 2000);
+    };
+
+    const revokeKey = async (keyToRevoke: string) => {
+        if (!confirm("Revoke this API key? Any apps using it will lose access immediately.")) return;
+        setRevokingKey(keyToRevoke);
+        try {
+            const res = await fetch(`${CONTROL_PLANE}/api-keys/${keyToRevoke}`, {
+                method: "DELETE",
+                headers: { "X-API-Key": keyToRevoke },
+            });
+            if (res.ok) {
+                fetchKeys();
+            } else {
+                console.error("Failed to revoke key:", await res.text());
+            }
+        } catch (err) {
+            console.error("Failed to revoke key:", err);
+        } finally {
+            setRevokingKey(null);
+        }
     };
 
     return (
@@ -158,11 +179,11 @@ export default function ApiKeysView({ address }: ApiKeysViewProps) {
                                 >
                                     {copiedKey === keyObj.key ? <Check size={18} className="text-emerald-400" /> : <Copy size={18} />}
                                 </button>
-                                {/* We don't have a delete endpoint yet, so this is visual only for now to show intention in UI */}
                                 <button
-                                    disabled
-                                    className="p-2 text-muted/50 rounded-lg cursor-not-allowed"
-                                    title="Revoke key (coming soon)"
+                                    onClick={() => revokeKey(keyObj.key)}
+                                    disabled={revokingKey === keyObj.key}
+                                    className="p-2 text-muted hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title="Revoke key"
                                 >
                                     <Trash2 size={18} />
                                 </button>

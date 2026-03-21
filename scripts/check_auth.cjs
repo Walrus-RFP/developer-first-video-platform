@@ -5,20 +5,29 @@ async function main() {
     const args = process.argv.slice(2);
     if (args.length < 2) {
         console.error("Usage: node check_auth.cjs <video_id> <user_address>");
+        console.error("  Set SUI_PACKAGE_ID, SUI_REGISTRY_ID, SUI_ACCESS_STORE_ID env vars.");
         process.exit(1);
     }
     const [videoId, userAddress] = args;
 
-    const PACKAGE_ID = "0x08ecb6ca2664cb2ec5aeda6fb1ef87ed142becc206fc9c735cdfe2674828a615";
-    const REGISTRY_ID = "0x7b1d0dd383c8e02391fb15a7fe116f6095a391fa99392f277cf09f29b4665cb8";
+    const PACKAGE_ID      = process.env.SUI_PACKAGE_ID      || "0x08ecb6ca2664cb2ec5aeda6fb1ef87ed142becc206fc9c735cdfe2674828a615";
+    const REGISTRY_ID     = process.env.SUI_REGISTRY_ID     || "0x7b1d0dd383c8e02391fb15a7fe116f6095a391fa99392f277cf09f29b4665cb8";
+    const ACCESS_STORE_ID = process.env.SUI_ACCESS_STORE_ID  || null;
+
+    if (!ACCESS_STORE_ID) {
+        console.error("SUI_ACCESS_STORE_ID is required. Set it as an environment variable.");
+        process.exit(1);
+    }
 
     const client = new SuiClient({ url: getFullnodeUrl('testnet') });
     const tx = new Transaction();
 
+    // access_control::is_authorized(registry, store, video_id, user)
     tx.moveCall({
-        target: `${PACKAGE_ID}::video_registry::is_authorized`,
+        target: `${PACKAGE_ID}::access_control::is_authorized`,
         arguments: [
             tx.object(REGISTRY_ID),
+            tx.object(ACCESS_STORE_ID),
             tx.pure.string(videoId),
             tx.pure.address(userAddress)
         ]

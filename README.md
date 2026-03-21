@@ -28,7 +28,7 @@ The platform is split into two microservices to ensure stability under load:
 ### 1. Setup Environment
 ```bash
 # Clone the repository
-git clone https://github.com/Walrus-RFP/developer-first-video-platform.git
+git clone https://github.com/your-org/developer-first-video-platform.git
 cd developer-first-video-platform
 
 # Create Python environment
@@ -69,7 +69,46 @@ Visit `http://localhost:3000` to see the UI.
 
 ---
 
-## 💻 Developer SDK (Python)
+## 💻 Developer SDKs
+
+The platform ships SDKs for both **Python** (backend integrations) and **TypeScript/JavaScript** (frontend and Node.js).
+
+### TypeScript / JavaScript SDK (`sdk-ts/`)
+
+```bash
+# From the sdk-ts directory
+npm install
+npm run build
+```
+
+```ts
+import { WalrusVideo } from '@walrus-video/sdk';
+
+const sdk = new WalrusVideo({
+  apiKey: 'cv_your_api_key_here',
+  apiBase: 'http://localhost:8000',
+});
+
+// Upload (browser File or Node.js file path)
+const videoId = await sdk.uploadVideo(file, {
+  title: 'My First Video',
+  isPublic: true,
+  onProgress: (uploaded, total) => console.log(`${uploaded}/${total} chunks`),
+});
+
+// Playback
+const playlistUrl = await sdk.getPlaybackUrl(videoId);
+
+// Embed
+const { iframe_html } = await sdk.getEmbed(videoId);
+
+// Verify incoming webhook signatures
+const valid = await WalrusVideo.verifyWebhookSignature(rawBody, sigHeader, secret);
+```
+
+---
+
+### Python SDK (`utils/sdk.py`)
 
 We provide a specialized SDK (`utils/sdk.py`) to make interacting with the platform trivial.
 

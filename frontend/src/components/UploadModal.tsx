@@ -9,10 +9,27 @@ import { Transaction } from "@mysten/sui/transactions";
 const CONTROL_PLANE = (process.env.NEXT_PUBLIC_CONTROL_PLANE_URL || "http://127.0.0.1:8000") + "/v1";
 const DATA_PLANE = (process.env.NEXT_PUBLIC_DATA_PLANE_URL || "http://127.0.0.1:8001") + "/v1";
 const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
+const PARALLEL_UPLOADS = 4;          // max concurrent chunk uploads
+
+async function uploadChunk(sessionId: string, chunk: Blob, index: number, retries = 3): Promise<void> {
+    const formData = new FormData();
+    formData.append("file", chunk, `chunk_${index}`);
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        const resp = await fetch(`${DATA_PLANE}/upload-chunk/${sessionId}/chunk_${index}/${index}`, {
+            method: "POST",
+            body: formData,
+        });
+        if (resp.ok) return;
+        const err = await resp.text().catch(() => "unknown error");
+        if (attempt === retries) throw new Error(`Chunk ${index} failed after ${retries} attempts: ${err}`);
+        await new Promise(r => setTimeout(r, 500 * attempt));
+    }
+}
 
 export default function UploadModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: () => void }) {
     const [file, setFile] = useState<File | null>(null);
     const [title, setTitle] = useState("");
+    const [description, setDescription] = useState("");
     const [apiKey, setApiKey] = useState("");
     const [isPublic, setIsPublic] = useState(true);
     const [status, setStatus] = useState<"idle" | "uploading" | "processing" | "success" | "error">("idle");
@@ -45,31 +62,33 @@ export default function UploadModal({ onClose, onSuccess }: { onClose: () => voi
 
             const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
 
-            // We are forcing a fresh upload every time to bypass any corrupt cached blobs
-            // on the backend from previous failed attempts.
-            for (let i = 0; i < totalChunks; i++) {
-
-
-                const start = i * CHUNK_SIZE;
-                const end = Math.min(file.size, start + CHUNK_SIZE);
-                const chunk = file.slice(start, end);
-
-                const formData = new FormData();
-                formData.append("file", chunk, `chunk_${i}`);
-
-                const chunkResp = await fetch(`${DATA_PLANE}/upload-chunk/${sessionId}/chunk_${i}/${i}`, {
-                    method: "POST",
-                    body: formData
-                });
-
-                if (!chunkResp.ok) {
-                    const errText = await chunkResp.text();
-                    console.error(`Chunk ${i} upload failed:`, errText);
-                    throw new Error(`Chunk ${i} upload failed: ${errText}`);
+            // Check which chunks are already on the server (resumable upload)
+            let uploadedChunks = new Set<number>();
+            try {
+                const sessionStatus = await fetch(`${DATA_PLANE}/upload-session/${sessionId}`);
+                if (sessionStatus.ok) {
+                    const sessionData = await sessionStatus.json();
+                    uploadedChunks = new Set(sessionData.uploaded_chunks || []);
                 }
+            } catch { /* ignore — start fresh */ }
 
-                setProgress(Math.round(((i + 1) / totalChunks) * 100));
+            // Build list of chunks still needed
+            const pending = Array.from({ length: totalChunks }, (_, i) => i)
+                .filter(i => !uploadedChunks.has(i));
 
+            let completed = totalChunks - pending.length; // already-uploaded count
+            setProgress(Math.round((completed / totalChunks) * 100));
+
+            // Upload in parallel batches of PARALLEL_UPLOADS
+            for (let i = 0; i < pending.length; i += PARALLEL_UPLOADS) {
+                const batch = pending.slice(i, i + PARALLEL_UPLOADS);
+                await Promise.all(batch.map(async (chunkIndex) => {
+                    const start = chunkIndex * CHUNK_SIZE;
+                    const end = Math.min(file.size, start + CHUNK_SIZE);
+                    await uploadChunk(sessionId, file.slice(start, end), chunkIndex);
+                    completed++;
+                    setProgress(Math.round((completed / totalChunks) * 100));
+                }));
             }
 
             // 3. Kick off async completion
@@ -78,6 +97,7 @@ export default function UploadModal({ onClose, onSuccess }: { onClose: () => voi
             const params = new URLSearchParams();
             if (account) params.set("owner", account.address);
             if (title.trim()) params.set("title", title.trim());
+            if (description.trim()) params.set("description", description.trim());
             params.set("is_public", isPublic ? "true" : "false");
 
             const qs = params.toString() ? `?${params.toString()}` : "";
@@ -91,9 +111,14 @@ export default function UploadModal({ onClose, onSuccess }: { onClose: () => voi
                 throw new Error(errorData.detail || "Upload completion failed");
             }
 
-            // 4. Poll for status
+            // 4. Poll for status (timeout after 10 minutes)
             let completeData = null;
+            const POLL_TIMEOUT_MS = 10 * 60 * 1000;
+            const pollStart = Date.now();
             while (true) {
+                if (Date.now() - pollStart > POLL_TIMEOUT_MS) {
+                    throw new Error("Upload processing timed out after 10 minutes. Check backend logs.");
+                }
                 await new Promise(resolve => setTimeout(resolve, 3000));
 
                 const statusResp = await fetch(`${CONTROL_PLANE}/upload-status/${sessionId}`);
@@ -111,6 +136,52 @@ export default function UploadModal({ onClose, onSuccess }: { onClose: () => voi
                 }
             }
 
+            // 5a. Seal key setup for private videos
+            if (!isPublic && completeData?.video_id && account) {
+                try {
+                    setStatusMsg("Setting up Seal key encryption...");
+                    // Fetch the plaintext AES key from server (owner-only, one-time)
+                    const keyResp = await fetch(
+                        `${CONTROL_PLANE}/videos/${completeData.video_id}/encryption-key`,
+                        { headers: { "X-API-Key": apiKey } }
+                    );
+                    if (keyResp.ok) {
+                        const { encryption_key_b64 } = await keyResp.json();
+                        // Dynamically import Seal utilities (avoids SSR issues)
+                        const { sealEncryptVideoKey } = await import("@/lib/seal");
+                        // NOTE: suiClient is already available from the component scope
+                        const encryptedKeyBytes = await sealEncryptVideoKey(
+                            suiClient,
+                            completeData.video_id,
+                            encryption_key_b64,
+                        );
+                        // Upload Seal-encrypted key blob to data plane
+                        const DATA_PLANE_BASE = (process.env.NEXT_PUBLIC_DATA_PLANE_URL || "http://127.0.0.1:8001");
+                        const blobResp = await fetch(`${DATA_PLANE_BASE}/v1/seal-blob`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/octet-stream" },
+                            body: encryptedKeyBytes.buffer as ArrayBuffer,
+                        });
+                        if (blobResp.ok) {
+                            const { blob_id } = await blobResp.json();
+                            // Commit to control plane — this clears the plaintext key from server
+                            await fetch(
+                                `${CONTROL_PLANE}/videos/${completeData.video_id}/seal-key`,
+                                {
+                                    method: "POST",
+                                    headers: { "X-API-Key": apiKey, "Content-Type": "application/json" },
+                                    body: JSON.stringify({ seal_key_blob_id: blob_id }),
+                                }
+                            );
+                            setStatusMsg("Seal key committed — server no longer holds the decryption key.");
+                        }
+                    }
+                } catch (sealErr) {
+                    // Non-fatal: AES-GCM fallback remains active if Seal setup fails
+                    console.warn("Seal key setup failed (AES-GCM fallback active):", sealErr);
+                }
+            }
+
             // 5. Sign and execute on-chain transaction
             setStatusMsg("Requesting Wallet Signature...");
             if (account && completeData.sui_package_id && completeData.sui_registry_id) {
@@ -119,7 +190,9 @@ export default function UploadModal({ onClose, onSuccess }: { onClose: () => voi
                     target: `${completeData.sui_package_id}::video_registry::register_video`,
                     arguments: [
                         tx.object(completeData.sui_registry_id),
-                        tx.pure.string(completeData.video_id)
+                        tx.pure.string(completeData.video_id),
+                        tx.pure.bool(isPublic),
+                        tx.pure.string(completeData.content_hash || ""),
                     ]
                 });
 
@@ -203,6 +276,13 @@ export default function UploadModal({ onClose, onSuccess }: { onClose: () => voi
                                     className="w-1/2 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm placeholder:text-muted focus:outline-none focus:border-white/30 transition-colors"
                                 />
                             </div>
+                            <input
+                                type="text"
+                                placeholder="Description (optional)"
+                                value={description}
+                                onChange={(e) => setDescription(e.target.value)}
+                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm placeholder:text-muted focus:outline-none focus:border-white/30 transition-colors"
+                            />
                             <div
                                 className="border-2 border-dashed border-white/10 rounded-2xl p-12 text-center space-y-4 hover:border-white/20 transition-colors cursor-pointer group"
                                 onClick={() => document.getElementById("fileInput")?.click()}

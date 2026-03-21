@@ -12,7 +12,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U walrus_user -d walrus_video" ]
+      test: ["CMD-SHELL", "pg_isready -U walrus_user -d walrus_video"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -27,11 +27,20 @@ services:
     environment:
       - DATABASE_URL=postgresql+psycopg2://walrus_user:walrus_password@db:5432/walrus_video
       - DATA_PLANE_URL=http://data-plane:8001
-      - WALRUS_AGGREGATOR=https://aggregator.testnet.sui.io:443
-      - WALRUS_PUBLISHER=https://publisher.testnet.sui.io:443
+      - PUBLIC_DATA_PLANE_URL=${PUBLIC_DATA_PLANE_URL:-http://localhost:8001}
+      - WALRUS_AGGREGATOR=${WALRUS_AGGREGATOR:-https://aggregator.walrus-testnet.walrus.space}
+      - WALRUS_PUBLISHER=${WALRUS_PUBLISHER:-https://publisher.walrus-testnet.walrus.space}
+      - SIGNING_SECRET=${SIGNING_SECRET:-change_me_in_production}
+      - SUI_AUTH_PROXY_URL=http://sui-auth-proxy:8002
+      - SUI_PACKAGE_ID=${SUI_PACKAGE_ID:-0x0}
+      - SUI_REGISTRY_ID=${SUI_REGISTRY_ID:-0x0}
+      - SUI_ACCESS_STORE_ID=${SUI_ACCESS_STORE_ID:-0x0}
+      - WALRUS_HLS_EPOCHS=${WALRUS_HLS_EPOCHS:-50}
     depends_on:
       db:
         condition: service_healthy
+      sui-auth-proxy:
+        condition: service_started
     volumes:
       - ./storage:/app/storage
 
@@ -42,8 +51,12 @@ services:
       - "8001:8001"
     environment:
       - DATABASE_URL=postgresql+psycopg2://walrus_user:walrus_password@db:5432/walrus_video
-      - WALRUS_AGGREGATOR=https://aggregator.testnet.sui.io:443
-      - WALRUS_PUBLISHER=https://publisher.testnet.sui.io:443
+      - CONTROL_PLANE_URL=http://control-plane:8000
+      - WALRUS_AGGREGATOR=${WALRUS_AGGREGATOR:-https://aggregator.walrus-testnet.walrus.space}
+      - WALRUS_PUBLISHER=${WALRUS_PUBLISHER:-https://publisher.walrus-testnet.walrus.space}
+      - SIGNING_SECRET=${SIGNING_SECRET:-change_me_in_production}
+      - WALRUS_CHUNK_EPOCHS=${WALRUS_CHUNK_EPOCHS:-5}
+      - WALRUS_HLS_EPOCHS=${WALRUS_HLS_EPOCHS:-50}
     depends_on:
       db:
         condition: service_healthy
@@ -54,6 +67,27 @@ services:
     build: ./sui-auth-proxy
     ports:
       - "8002:8002"
+    environment:
+      - SUI_PACKAGE_ID=${SUI_PACKAGE_ID:-}
+      - SUI_REGISTRY_ID=${SUI_REGISTRY_ID:-}
+      - SUI_ACCESS_STORE_ID=${SUI_ACCESS_STORE_ID:-}
+      - SUI_NETWORK=${SUI_NETWORK:-testnet}
+      - PORT=8002
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_CONTROL_PLANE_URL=${NEXT_PUBLIC_CONTROL_PLANE_URL:-http://localhost:8000}
+      - NEXT_PUBLIC_DATA_PLANE_URL=${NEXT_PUBLIC_DATA_PLANE_URL:-http://localhost:8001}
+      - NEXT_PUBLIC_SUI_PACKAGE_ID=${SUI_PACKAGE_ID:-0x0}
+      - NEXT_PUBLIC_SUI_REGISTRY_ID=${SUI_REGISTRY_ID:-0x0}
+      - NEXT_PUBLIC_SUI_ACCESS_STORE_ID=${SUI_ACCESS_STORE_ID:-0x0}
+      - NEXT_PUBLIC_SUI_NETWORK=${SUI_NETWORK:-testnet}
+    depends_on:
+      - control-plane
+      - data-plane
 
 volumes:
   postgres_data:
