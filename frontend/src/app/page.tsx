@@ -1,9 +1,10 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Play, Info, ArrowUpRight } from "lucide-react";
+import { Plus, Play, Info, ArrowUpRight, Lock, Loader2 } from "lucide-react";
 import { useState, useEffect } from "react";
-import { useCurrentAccount, useSuiClient, useSignPersonalMessage } from "@mysten/dapp-kit";
+import { useCurrentAccount, useSuiClient, useSignPersonalMessage, useSignAndExecuteTransaction } from "@mysten/dapp-kit";
+import { Transaction } from "@mysten/sui/transactions";
 import UploadModal from "@/components/UploadModal";
 import VideoPlayer from "@/components/VideoPlayer";
 import ApiKeysView from "@/components/ApiKeysView";
@@ -11,6 +12,16 @@ import AccessControlView from "@/components/AccessControlView";
 import DashboardStats from "@/components/DashboardStats";
 
 const API_BASE = (process.env.NEXT_PUBLIC_CONTROL_PLANE_URL || "http://127.0.0.1:8000") + "/v1";
+const SUI_PACKAGE_ID    = process.env.NEXT_PUBLIC_SUI_PACKAGE_ID    || "";
+const SUI_ACCESS_STORE  = process.env.NEXT_PUBLIC_SUI_ACCESS_STORE_ID || "";
+
+interface SubscriptionOffer {
+    videoId: string;
+    videoTitle: string;
+    priceMist: number;
+    durationEpochs: number;
+    revenueAddress: string;
+}
 
 export default function Home() {
     const [videos, setVideos] = useState<any[]>([]);
@@ -18,9 +29,12 @@ export default function Home() {
     const [viewType, setViewType] = useState<"all" | "mine" | "api_keys" | "access">("all");
     const [showUpload, setShowUpload] = useState(false);
     const [activePlayback, setActivePlayback] = useState<{ id: string, url: string } | null>(null);
+    const [subscriptionOffer, setSubscriptionOffer] = useState<SubscriptionOffer | null>(null);
+    const [purchasing, setPurchasing] = useState(false);
     const account = useCurrentAccount();
     const suiClient = useSuiClient();
     const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
+    const { mutateAsync: signAndExecuteTransaction } = useSignAndExecuteTransaction();
 
     const fetchVideos = async (type = viewType) => {
         console.log(`[Frontend] Fetching videos for ${type}...`);
@@ -44,6 +58,32 @@ export default function Home() {
         fetchVideos(viewType);
     }, [viewType, account?.address]);
 
+    const handlePurchaseSubscription = async () => {
+        if (!subscriptionOffer || !account || !SUI_PACKAGE_ID || !SUI_ACCESS_STORE) return;
+        setPurchasing(true);
+        try {
+            const tx = new Transaction();
+            const [paymentCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(subscriptionOffer.priceMist)]);
+            tx.moveCall({
+                target: `${SUI_PACKAGE_ID}::access_control::purchase_access`,
+                arguments: [
+                    tx.object(SUI_ACCESS_STORE),
+                    tx.pure.string(subscriptionOffer.videoId),
+                    paymentCoin,
+                ],
+            });
+            await signAndExecuteTransaction({ transaction: tx });
+            const videoId = subscriptionOffer.videoId;
+            setSubscriptionOffer(null);
+            // Retry playback now that access is granted
+            await handlePlay(videoId);
+        } catch (err: any) {
+            alert(err.message || "Purchase failed.");
+        } finally {
+            setPurchasing(false);
+        }
+    };
+
     const handlePlay = async (videoId: string) => {
         try {
             const url = account
@@ -51,7 +91,25 @@ export default function Home() {
                 : `${API_BASE}/playback-url/${videoId}`;
             const res = await fetch(url);
             if (!res.ok) {
-                if (res.status === 403) throw new Error("Permission denied. Ensure wallet holds access policy.");
+                if (res.status === 403) {
+                    // Check if there's a subscription policy available
+                    const subRes = await fetch(`${API_BASE}/subscription/${videoId}`).catch(() => null);
+                    if (subRes?.ok) {
+                        const sub = await subRes.json();
+                        if (sub.has_policy && sub.price_mist > 0) {
+                            const vid = videos.find(v => v.video_id === videoId);
+                            setSubscriptionOffer({
+                                videoId,
+                                videoTitle: vid?.title || videoId.slice(0, 8) + "…",
+                                priceMist: sub.price_mist,
+                                durationEpochs: sub.duration_epochs,
+                                revenueAddress: sub.revenue_address,
+                            });
+                            return;
+                        }
+                    }
+                    throw new Error("Permission denied. Ensure wallet holds access policy.");
+                }
                 throw new Error("Playback failed");
             }
             const data = await res.json();
@@ -217,6 +275,50 @@ export default function Home() {
                         playbackUrl={activePlayback.url}
                         onClose={() => setActivePlayback(null)}
                     />
+                )}
+                {subscriptionOffer && (
+                    <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-6">
+                        <motion.div
+                            initial={{ scale: 0.95, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            className="w-full max-w-md glass-card rounded-3xl p-10 space-y-6"
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-yellow-400/10 flex items-center justify-center">
+                                    <Lock size={18} className="text-yellow-400" />
+                                </div>
+                                <div>
+                                    <h2 className="text-xl font-bold tracking-tight">Private Content</h2>
+                                    <p className="text-muted text-sm truncate">{subscriptionOffer.videoTitle}</p>
+                                </div>
+                            </div>
+                            <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-3">
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-muted">Price</span>
+                                    <span className="font-bold">{(subscriptionOffer.priceMist / 1_000_000_000).toFixed(4)} SUI</span>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-muted">Access duration</span>
+                                    <span className="font-bold">{subscriptionOffer.durationEpochs} epoch{subscriptionOffer.durationEpochs !== 1 ? "s" : ""} (~{subscriptionOffer.durationEpochs} day{subscriptionOffer.durationEpochs !== 1 ? "s" : ""})</span>
+                                </div>
+                            </div>
+                            <p className="text-xs text-muted">
+                                Your wallet will sign a Sui transaction to purchase time-limited access. SUI is sent directly to the content owner.
+                            </p>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={handlePurchaseSubscription}
+                                    disabled={purchasing || !account}
+                                    className="btn-primary flex-1 flex items-center justify-center gap-2 disabled:opacity-40"
+                                >
+                                    {purchasing ? <Loader2 size={16} className="animate-spin" /> : <Lock size={16} />}
+                                    {purchasing ? "Purchasing…" : "Buy Access"}
+                                </button>
+                                <button onClick={() => setSubscriptionOffer(null)} className="btn-secondary">Cancel</button>
+                            </div>
+                            {!account && <p className="text-xs text-yellow-400 text-center">Connect your wallet to purchase access.</p>}
+                        </motion.div>
+                    </div>
                 )}
             </AnimatePresence>
         </div>
