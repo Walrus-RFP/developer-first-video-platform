@@ -1,13 +1,10 @@
 "use client";
 
-import { motion, AnimatePresence } from "framer-motion";
-import { Plus } from "lucide-react";
-import { useState } from "react";
+import { motion } from "framer-motion";
+import { ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
-import UploadModal from "@/components/UploadModal";
 
 export default function Home() {
-    const [showUpload, setShowUpload] = useState(false);
     const router = useRouter();
 
     return (
@@ -40,11 +37,8 @@ export default function Home() {
                         Decentralized video infrastructure on Sui & Walrus, with on-chain access control, threshold encryption, and a developer-first REST API.
                     </p>
                     <div className="flex gap-3">
-                        <button onClick={() => setShowUpload(true)} className="btn-primary flex items-center gap-2">
-                            <Plus size={16} /> Upload Video
-                        </button>
-                        <button onClick={() => router.push("/dashboard")} className="btn-secondary">
-                            Open Dashboard
+                        <button onClick={() => router.push("/dashboard")} className="btn-primary flex items-center gap-2">
+                            Start Building <ArrowRight size={16} />
                         </button>
                     </div>
                 </motion.div>
@@ -81,15 +75,6 @@ export default function Home() {
                     </div>
                 </motion.div>
             </section>
-
-            <AnimatePresence>
-                {showUpload && (
-                    <UploadModal
-                        onClose={() => setShowUpload(false)}
-                        onSuccess={() => router.push("/dashboard")}
-                    />
-                )}
-            </AnimatePresence>
         </div>
     );
 }
