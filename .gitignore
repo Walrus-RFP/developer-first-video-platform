@@ -46,6 +46,15 @@ coverage/
 .idea/
 
 # ------------------------------
+# Misc
+# ------------------------------
+.deepeval/
+package/
+*.tsbuildinfo
+pytest_cache/
+.pytest_cache/
+
+# ------------------------------
 # Secrets
 # ------------------------------
 .env
