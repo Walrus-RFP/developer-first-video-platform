@@ -132,8 +132,8 @@ Returns a list of already uploaded chunks so the client can resume safely.
 ```
 
 ### Upload Chunk
-`POST /v1/upload-chunk/{session_id}/chunk_{index}/{index}`
-Uploads physical binary video data.
+`POST /v1/upload-chunk/{session_id}/{chunk_id}/{chunk_index}`
+Uploads physical binary video data. `chunk_id` is a client-assigned identifier (e.g. `chunk_0`); `chunk_index` is the zero-based integer ordering index. The endpoint is idempotent — re-uploading the same `chunk_id` is a no-op.
 **Request:** `multipart/form-data` containing the file byte chunk.
 
 ---
@@ -141,6 +141,6 @@ Uploads physical binary video data.
 ## 2.2 Streaming
 
 ### Fetch Playlist / Video Segments
-`GET /hls/{video_id}/{filename}`
-Serves actual HLS streams (`.m3u8` and `.ts` files) from storage or Walrus.
-Requires valid signature parameters derived from `/v1/playback-url`.
+`GET /play/{video_id}/{file_path}`
+Serves actual HLS streams (`.m3u8` playlists and `.ts` segments) from local storage or Walrus.
+Requires valid HMAC signature parameters (`expires`, `sig`, and optionally `enc_key`) derived from `/v1/playback-url`. The `file_path` is a catch-all path parameter (e.g. `index.m3u8`, `720p/seg000.ts`).

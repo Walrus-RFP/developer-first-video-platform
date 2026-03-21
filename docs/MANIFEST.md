@@ -24,14 +24,13 @@ The manifest gives them meaning.
 
 # 2. Manifest Location
 
-Each upload session stores one manifest file.
+Each upload session stores one manifest file during the chunk upload phase:
 
-Example:
-
+```
 storage/{session_id}/manifest.json
+```
 
-Future (Walrus):
-walrus_bucket/{video_id}/manifest.json
+After the upload completes and HLS transcoding runs, the Control Plane stores HLS asset blob IDs (indexed by file path) in the same manifest under the `hls_assets` key. The completed manifest is then retrievable via the Control Plane at `/v1/hls-manifest/{video_id}`.
 
 ---
 
@@ -40,43 +39,45 @@ walrus_bucket/{video_id}/manifest.json
 
 ## 3. Manifest Structure
 
-Example `manifest.json`:
+The manifest during chunk upload:
 
 ```json
 {
-  "video_id": "vid_123",
   "session_id": "abc123",
-  "version": 1,
-
-  "owner_id": "user_456",
-
-  "created_at": "2026-02-18T10:00:00Z",
-
-  "video_metadata": {
-    "filename": "lecture.mp4",
-    "duration_seconds": 3600,
-    "resolution": "1920x1080",
-    "codec": "h264",
-    "size_bytes": 987654321
-  },
-
-  "chunk_info": {
-    "chunk_size_bytes": 4194304,
-    "total_chunks": 25,
-    "ordered_chunks": [
-      "chunk_0001",
-      "chunk_0002",
-      "chunk_0003"
-    ]
-  },
-
-  "checksums": {
-    "chunk_0001": "sha256:abc...",
-    "chunk_0002": "sha256:def..."
-  },
-
-  "final_checksum": "sha256:xyz..."
+  "chunks": [
+    {
+      "chunk_id": "chunk_0",
+      "chunk_index": 0,
+      "blob_id": "BNi4xW...",
+      "checksum": "sha256:abc...",
+      "size": 4194304
+    },
+    {
+      "chunk_id": "chunk_1",
+      "chunk_index": 1,
+      "blob_id": "Cq7mRx...",
+      "checksum": "sha256:def...",
+      "size": 4194304
+    }
+  ]
 }
+```
+
+After HLS processing completes, the manifest gains an `hls_assets` map (filename → Walrus blob ID):
+
+```json
+{
+  "session_id": "abc123",
+  "chunks": [ ... ],
+  "hls_assets": {
+    "index.m3u8":       "Dp9kTz...",
+    "1080p/index.m3u8": "Eq2wVy...",
+    "1080p/seg000.ts":  "Fr3xUz...",
+    "720p/index.m3u8":  "Gs4yWa...",
+    "thumbnail.jpg":    "Ht5zXb..."
+  }
+}
+```
 
 ---
 

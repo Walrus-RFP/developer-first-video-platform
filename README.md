@@ -6,15 +6,15 @@ A decentralized, developer-first video platform built on **Sui** and the **Walru
 
 The platform is split into two microservices to ensure stability under load:
 
-1. **Control Plane (Port 8000):** 
-   - Handles metadata, database operations (SQLite), API keys, webhook event dispatching, and Sui smart contract interactions.
+1. **Control Plane (Port 8000):**
+   - Handles metadata, database operations (SQLite in dev / PostgreSQL in production), API keys, webhook event dispatching, and Sui smart contract interactions.
    - Routes: `/v1/upload-session`, `/v1/complete-upload`, `/v1/videos`, `/v1/webhooks`, `/v1/api-keys`, `/v1/metrics`.
    - **Authentication**: Secured via `X-API-Key` headers.
 
 2. **Data Plane (Port 8001):**
-   - Handles heavy lifting: receiving video chunks, merging, streaming HLS playlists, and reading/writing to the Walrus network.
-   - Routes: `/v1/upload-chunk`, `/v1/manifest`, `/v1/upload-session/{id}`, `/hls` (playback).
-   - Validates signed URLs before streaming private video segments.
+   - Handles heavy lifting: receiving video chunks, streaming HLS playlists, and reading/writing to the Walrus network.
+   - Routes: `/v1/upload-chunk/{session_id}/{chunk_id}/{chunk_index}`, `/v1/manifest/{session_id}`, `/v1/upload-session/{session_id}`, `/play/{video_id}/{file_path}` (HLS serving).
+   - Validates HMAC-signed URLs before streaming private video segments.
 
 ---
 

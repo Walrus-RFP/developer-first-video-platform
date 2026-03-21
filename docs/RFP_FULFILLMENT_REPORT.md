@@ -17,7 +17,7 @@ Deep comparison of Mux, Agora, Cloudflare Stream, AWS Elemental MediaConvert, an
 
 | Workflow | Implementation |
 |---|---|
-| Upload (chunked, resumable, parallel) | `POST /v1/upload-session` → `POST /v1/upload-chunk/{s}/{id}/{i}` → `POST /v1/complete-upload/{s}` |
+| Upload (chunked, resumable, parallel) | `POST /v1/upload-session` → `POST /v1/upload-chunk/{session_id}/{chunk_id}/{chunk_index}` → `POST /v1/complete-upload/{session_id}` |
 | HLS transcoding (ABR) | FFmpeg pipeline: 1080p / 720p / 480p variants, stored on Walrus with configurable epoch retention |
 | On-chain registration | Frontend signs `video_registry::register_video` on Sui after processing |
 | Public playback | HMAC-signed URL → Data Plane HLS serving with 3-tier cache |
@@ -59,7 +59,7 @@ Deployed on Sui testnet. `is_authorized` is called read-only via `devInspectTran
 ### 5. Walrus Storage Integration
 **Status: Complete & Tested** · `utils/walrus.py`, `tests/test_walrus.py`
 
-- Upload chunks stored with configurable epoch retention (`WALRUS_CHUNK_EPOCHS=5` temp, `WALRUS_HLS_EPOCHS=50` long-lived)
+- Upload chunks stored with configurable epoch retention (`WALRUS_CHUNK_EPOCHS=5` temp, `WALRUS_HLS_EPOCHS=200` long-lived)
 - Adaptive retry with exponential backoff (up to 5 attempts, 5+ minute window for testnet propagation delays)
 - Deduplication via `alreadyCertified` handling; fast-fail on 404 (blob permanently pruned)
 - Blob IDs stored in per-video `manifest.json` for deterministic retrieval
@@ -147,7 +147,6 @@ Both SDKs support resumable uploads, progress callbacks, webhook signature verif
 | `docs/ASSET_MODEL.md` | Video asset definition, versioning, reuse model |
 | `docs/CDN_INTEGRATION.md` | CDN-compatible caching headers, Cloudflare configuration |
 | `docs/REQUIREMENTS.md` | Functional and non-functional requirements, success criteria |
-| `docs/PLAN.md` | Two-week execution plan with daily task breakdown |
 | `docs/SECURITY_AUDIT.md` | Audit scope definition for third-party review |
 | `CLAUDE.md` | Developer guide: commands, architecture, env vars |
 

@@ -117,5 +117,5 @@ All variables with defaults are safe for local dev. Required for production:
 | `SUI_ACCESS_STORE_ID` | sui-auth-proxy | Shared AccessStore object ID |
 | `SUI_NETWORK` | sui-auth-proxy | `testnet` or `mainnet` |
 | `PUBLIC_DATA_PLANE_URL` | signing.py | Embedded in playback URLs returned to clients |
-| `WALRUS_HLS_EPOCHS` | upload.py | Default `50` (testnet max is ~53 epochs; mainnet supports more) |
+| `WALRUS_HLS_EPOCHS` | upload.py | Default `200` (long-lived HLS assets; mainnet supports higher values) |
 | `WALRUS_CHUNK_EPOCHS` | chunk_upload.py | Default `5` (temporary raw chunks) |
