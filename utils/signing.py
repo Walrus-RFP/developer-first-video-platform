@@ -3,6 +3,7 @@ import hmac
 import time
 import os
 from typing import Optional
+from urllib.parse import quote
 from utils.logger import logger
 
 _DEFAULT_SECRET = "super_secret_key_change_me"
@@ -29,7 +30,7 @@ def create_signed_url(video_id: str, file: str = "playlist.m3u8", expiry_seconds
 
     url = f"{PUBLIC_DATA_PLANE_URL}/play/{video_id}/{file}?exp={exp}&sig={sig}"
     if encryption_key:
-        url += f"&key={encryption_key}"
+        url += f"&key={quote(encryption_key, safe='')}"
         
     return url
 
