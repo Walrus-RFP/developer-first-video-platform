@@ -255,7 +255,7 @@ export default function UploadModal({ onClose, onSuccess }: { onClose: () => voi
                 <div className="space-y-8">
                     <div className="space-y-2">
                         <h2 className="text-3xl font-bold tracking-tight">ENLIST ASSET.</h2>
-                        <p className="text-muted text-sm">Upload your video to the Walrus decentralized network.</p>
+                        <p className="text-muted text-sm">Upload your video to the WalStream decentralized network.</p>
                     </div>
 
                     {status === "idle" && (

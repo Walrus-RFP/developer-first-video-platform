@@ -4,7 +4,7 @@ import { SuiProvider } from "@/providers/SuiProvider";
 import WalletConnect from "@/components/WalletConnect";
 
 export const metadata: Metadata = {
-    title: "Walrus Direct | Minimalist Video Platform",
+    title: "WalStream | Developer-First Video Infrastructure",
     description: "Next-generation video infrastructure on Sui & Walrus",
 };
 
@@ -26,7 +26,7 @@ export default function RootLayout({
                         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <div className="w-6 h-6 bg-white rounded-full" />
-                                <span className="font-semibold tracking-tight text-lg">WALRUS DIRECT</span>
+                                <span className="font-semibold tracking-tight text-lg">WALSTREAM</span>
                             </div>
                             <div className="flex items-center gap-6 text-sm font-medium text-muted hover:text-foreground transition-colors">
                                 <a href="#">Solutions</a>
@@ -44,16 +44,16 @@ export default function RootLayout({
                             <div className="space-y-4">
                                 <div className="flex items-center gap-2">
                                     <div className="w-5 h-5 bg-white rounded-full" />
-                                    <span className="font-semibold tracking-tight">WALRUS</span>
+                                    <span className="font-semibold tracking-tight">WALSTREAM</span>
                                 </div>
                                 <p className="text-xs text-muted leading-relaxed">
-                                    Empowering the next generation of decentralized video infrastructure. Built for developers, scaled by Walrus.
+                                    Developer-first video infrastructure on Sui & Walrus. Upload once, stream anywhere.
                                 </p>
                             </div>
                             <div />
                             <div />
                             <div className="text-right">
-                                <p className="text-xs text-muted">© 2026 Walrus Direct. All rights reserved.</p>
+                                <p className="text-xs text-muted">© 2026 WalStream. All rights reserved.</p>
                             </div>
                         </div>
                     </footer>
